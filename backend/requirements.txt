@@ -1,0 +1,9 @@
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pandas>=2.2
+numpy>=1.26
+openpyxl>=3.1
+python-calamine>=0.2   # 強烈建議：正式資料集「訂單資料」工作表百萬列等級，openpyxl 讀取要 3~4 分鐘且會卡住整個伺服器；
+                        # 裝了這個之後 ingest.py 會自動優先用它（Rust 實作，快很多）。裝不起來也沒關係，會自動退回 openpyxl。
+python-multipart>=0.0.9
+pydantic>=2.7

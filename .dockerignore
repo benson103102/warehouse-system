@@ -1,0 +1,9 @@
+# 不要把這些放進映像，保持映像小、避免把本機資料帶上雲
+backend/.venv/
+backend/data/
+**/__pycache__/
+**/*.pyc
+.git/
+docs/
+*.md
+.vscode/

@@ -1,0 +1,31 @@
+# Render Blueprint —— 在 Render 上一鍵建立這個服務。
+# 用法：把整個專案推到 GitHub → 到 Render 按 New +「Blueprint」→ 選這個 repo，
+# Render 會讀這支檔案自動建好服務。之後每次 git push，Render 會自動重新部署。
+#
+# ⚠️ 目前設定為「免費方案（plan: free）」，純試玩用：
+#    - 免費方案「不支援持久磁碟」，所以這裡沒有掛 disk。硬碟是用完即丟（ephemeral）：
+#      每次重新部署、或服務閒置一段時間自動休眠再被喚醒時，data/ 都會被清空
+#      —— 也就是「註冊的帳號、上傳的檔案會全部消失」。試玩沒差，正式用不行。
+#    - 免費服務閒置約 15 分鐘會自動休眠，下次有人打開時要等它冷啟動（數十秒）。
+#
+# 想讓資料真正保留：把 plan 改成 starter（約 $7/月），並在下方加回 disk 設定：
+#    disk:
+#      name: warehouse-data
+#      mountPath: /data
+#      sizeGB: 1
+
+services:
+  - type: web
+    name: warehouse-system
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free             # 純試玩省錢；資料不會保留。要保留資料改 starter + 加回上方 disk
+    region: singapore      # 離台灣較近；可改 oregon / frankfurt 等
+    healthCheckPath: /api/health
+    autoDeploy: true       # git push 後自動重新部署
+    envVars:
+      - key: WAREHOUSE_DATA_DIR
+        value: /data       # 免費方案下這是暫時目錄，重新部署／休眠喚醒會清空
+      # 前端由後端同源送出，不需要 CORS 白名單。若日後把前端拆成獨立網域，再打開下面這行：
+      # - key: WAREHOUSE_CORS_ORIGINS
+      #   value: https://your-frontend-domain.example.com

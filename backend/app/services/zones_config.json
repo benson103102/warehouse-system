@@ -1,0 +1,194 @@
+[
+  {
+    "id": "M-P3",
+    "name": "棧板區（中間-3）",
+    "section": "middle",
+    "material": "pallet",
+    "area_m2": 15.75,
+    "distance_m": 8.91
+  },
+  {
+    "id": "U-P7",
+    "name": "棧板區（上倉-7）",
+    "section": "upper",
+    "material": "pallet",
+    "area_m2": 18.83,
+    "distance_m": 16.8
+  },
+  {
+    "id": "U-P4",
+    "name": "棧板區（上倉-4）",
+    "section": "upper",
+    "material": "pallet",
+    "area_m2": 10.26,
+    "distance_m": 20.87
+  },
+  {
+    "id": "L-R3",
+    "name": "貨架區（下倉-3上）",
+    "section": "lower",
+    "material": "shelf",
+    "area_m2": 13.73,
+    "distance_m": 22.68
+  },
+  {
+    "id": "U-P3",
+    "name": "棧板區（上倉-3）",
+    "section": "upper",
+    "material": "pallet",
+    "area_m2": 22.81,
+    "distance_m": 24.35
+  },
+  {
+    "id": "L-R2",
+    "name": "貨架區（下倉-2上）",
+    "section": "lower",
+    "material": "shelf",
+    "area_m2": 13.73,
+    "distance_m": 25.87
+  },
+  {
+    "id": "M-P2",
+    "name": "棧板區（中間-2）",
+    "section": "middle",
+    "material": "pallet",
+    "area_m2": 50.2,
+    "distance_m": 26.78
+  },
+  {
+    "id": "U-P2",
+    "name": "棧板區（上倉-2）",
+    "section": "upper",
+    "material": "pallet",
+    "area_m2": 45.05,
+    "distance_m": 26.85
+  },
+  {
+    "id": "M-P1",
+    "name": "棧板區（中間-1）",
+    "section": "middle",
+    "material": "pallet",
+    "area_m2": 48.02,
+    "distance_m": 27.04
+  },
+  {
+    "id": "L-P1",
+    "name": "棧板區（下倉-1）",
+    "section": "lower",
+    "material": "pallet",
+    "area_m2": 129.15,
+    "distance_m": 27.46
+  },
+  {
+    "id": "U-P6",
+    "name": "棧板區（上倉-6）",
+    "section": "upper",
+    "material": "pallet",
+    "area_m2": 168.82,
+    "distance_m": 27.56
+  },
+  {
+    "id": "U-P1",
+    "name": "棧板區（上倉-1）",
+    "section": "upper",
+    "material": "pallet",
+    "area_m2": 109.73,
+    "distance_m": 28.23
+  },
+  {
+    "id": "L-R1",
+    "name": "貨架區（下倉-1上）",
+    "section": "lower",
+    "material": "shelf",
+    "area_m2": 13.73,
+    "distance_m": 30.2
+  },
+  {
+    "id": "L-R6",
+    "name": "貨架區（下倉-3下）",
+    "section": "lower",
+    "material": "shelf",
+    "area_m2": 7.65,
+    "distance_m": 32.52
+  },
+  {
+    "id": "L-R7",
+    "name": "貨架區（下倉-橫排1）",
+    "section": "lower",
+    "material": "shelf",
+    "area_m2": 14.18,
+    "distance_m": 32.71
+  },
+  {
+    "id": "U-R3",
+    "name": "貨架區（上倉-3）",
+    "section": "upper",
+    "material": "shelf",
+    "area_m2": 19.8,
+    "distance_m": 33.94
+  },
+  {
+    "id": "L-R8",
+    "name": "貨架區（下倉-橫排2）",
+    "section": "lower",
+    "material": "shelf",
+    "area_m2": 14.18,
+    "distance_m": 34.14
+  },
+  {
+    "id": "L-R5",
+    "name": "貨架區（下倉-2下）",
+    "section": "lower",
+    "material": "shelf",
+    "area_m2": 12.15,
+    "distance_m": 35.32
+  },
+  {
+    "id": "U-P5",
+    "name": "棧板區（上倉-5）",
+    "section": "upper",
+    "material": "pallet",
+    "area_m2": 12.87,
+    "distance_m": 35.52
+  },
+  {
+    "id": "L-R9",
+    "name": "貨架區（下倉-橫排3）",
+    "section": "lower",
+    "material": "shelf",
+    "area_m2": 14.18,
+    "distance_m": 35.62
+  },
+  {
+    "id": "L-R10",
+    "name": "貨架區（下倉-橫排4）",
+    "section": "lower",
+    "material": "shelf",
+    "area_m2": 18.9,
+    "distance_m": 37.32
+  },
+  {
+    "id": "U-R2",
+    "name": "貨架區（上倉-2）",
+    "section": "upper",
+    "material": "shelf",
+    "area_m2": 19.8,
+    "distance_m": 37.49
+  },
+  {
+    "id": "L-R4",
+    "name": "貨架區（下倉-1下）",
+    "section": "lower",
+    "material": "shelf",
+    "area_m2": 12.15,
+    "distance_m": 37.76
+  },
+  {
+    "id": "U-R1",
+    "name": "貨架區（上倉-1）",
+    "section": "upper",
+    "material": "shelf",
+    "area_m2": 21.3,
+    "distance_m": 41.21
+  }
+]

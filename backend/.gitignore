@@ -1,0 +1,9 @@
+# 虛擬環境（本機用，不進版控）
+.venv/
+
+# 落地保存的使用者資料（session 狀態、上傳的檔案、SQLite 資料庫）
+data/
+
+# Python 快取
+__pycache__/
+*.pyc
