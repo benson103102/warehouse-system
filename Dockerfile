@@ -22,7 +22,9 @@ COPY frontend ./frontend
 # 前端目錄：讓後端知道去哪裡找 index.html 一起送出。
 ENV WAREHOUSE_DATA_DIR=/data \
     WAREHOUSE_FRONTEND_DIR=/app/frontend
-RUN mkdir -p /data
+# chmod 777：Hugging Face Spaces 的容器以非 root 使用者（UID 1000）執行，
+# 若不開放寫入權限，後端建立 sessions／uploads／SQLite 時會 Permission denied。
+RUN mkdir -p /data && chmod 777 /data
 
 WORKDIR /app/backend
 

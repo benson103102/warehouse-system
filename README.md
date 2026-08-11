@@ -1,3 +1,15 @@
+<!-- 下面這段 --- 之間的設定是給 Hugging Face Spaces 讀的（告訴它用 Docker、對外埠 8000）。
+     部署到 Render 不受影響，Render 不看 README。 -->
+---
+title: 儲位配置與揀貨策略優化系統
+emoji: 📦
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 8000
+pinned: false
+---
+
 # 儲位配置與揀貨策略優化系統 — 前後端分離版
 
 這是把「儲位配置與揀貨策略優化系統.html」（原本 809KB、所有運算都寫在瀏覽器端 JS 裡的
