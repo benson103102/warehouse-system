@@ -5,7 +5,7 @@
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from .. import jsonsafe, state
 from ..deps import require_clean_result
@@ -49,4 +49,36 @@ def assignment(a_thresh: float = Query(70, ge=0, le=100), b_thresh: float = Quer
         "baseline_dist_m": result["baseline"], "weighted_dist_m": result["weighted"],
         "improvement_pct": result["improvement"], "coverage_pct": result["coverage"],
         "pool_size": result["pool_size"], "a_thresh": a_thresh, "b_thresh": b_thresh,
+    })
+
+
+@router.get("/wh_assignment")
+def wh_assignment(a_thresh: float = Query(70, ge=0, le=100), b_thresh: float = Query(90, ge=0, le=100),
+                   sku_id: Optional[int] = Query(None, description="只查單一 SKU 目前被分到哪個分區"),
+                   sess: state.SessionState = Depends(require_clean_result)):
+    """對應原前端 computeWhAssignment()／renderWhTabMap() 等：精細版儲位配置，依「共同揀取
+    關聯」把商品分群、群內相鄰擺放（比 /assignment 的類別大鍋分配更細，見 analytics.py 第10節
+    說明）。這一支比較貴（內含預測式ABC＋共同揀取分析），依 (a_thresh, b_thresh) 快取。"""
+    result = sess.cached(("wh_assignment", a_thresh, b_thresh),
+                         lambda: an.compute_wh_assignment(sess.cleaning_result.clean_df, CATEGORY_NAME_BY_ID,
+                                                           sess.zones, a_thresh, b_thresh))
+    if not result:
+        raise HTTPException(status_code=422, detail="清洗後無有效出貨資料可供分析")
+
+    if sku_id is not None:
+        info = result["sku_info"].get(sku_id)
+        if not info:
+            raise HTTPException(status_code=404, detail="查無此商品ID的出貨紀錄")
+        return jsonsafe.clean({
+            "sku_id": sku_id, "info": info, "zone": result["after_sku_zone"].get(sku_id),
+            "predicted_cls": result["sku_pred_cls"].get(sku_id),
+        })
+
+    # 全量 after_sku_zone／sku_info 是「每個 SKU 一筆」，量體遠小於原始出貨明細（明細可能
+    # 上百萬列，SKU 通常只有幾千個），一次回傳給前端自行畫地圖／查表即可，不需要再拆分頁。
+    return jsonsafe.clean({
+        "zone_before_cats": result["zone_before_cats"], "zone_after_class": result["zone_after_class"],
+        "after_prop": result["after_prop"], "before_cat_zone": result["before_cat_zone"],
+        "after_sku_zone": result["after_sku_zone"], "sku_count": len(result["sku_info"]),
+        "a_thresh": a_thresh, "b_thresh": b_thresh,
     })

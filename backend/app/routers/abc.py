@@ -58,3 +58,40 @@ def category_abc(a_thresh: float = Query(70, ge=0, le=100), b_thresh: float = Qu
     # category_abc_from_sku 只讀 items、另建新結構，不會改到 items，可直接用快取。
     cats = an.category_abc_from_sku(freq["items"], CATEGORY_NAME_BY_ID, a_thresh, b_thresh)
     return jsonsafe.clean({"categories": cats})
+
+
+@router.get("/predicted_category")
+def predicted_category_abc(a_thresh: float = Query(70, ge=0, le=100), b_thresh: float = Query(90, ge=0, le=100),
+                            sess: state.SessionState = Depends(require_clean_result)):
+    """對應原前端 computePredictedCategoryAbc()／renderPredictedAbc()：用「預測值」而非歷史值
+    做 ABC 分級——貨架類商品依預測揀貨次數排、棧板類依預測出貨量排。"""
+    if b_thresh < a_thresh:
+        raise HTTPException(status_code=400, detail="b_thresh 必須大於等於 a_thresh")
+    result = an.compute_predicted_category_abc(sess.cleaning_result.clean_df, CATEGORY_NAME_BY_ID,
+                                                a_thresh, b_thresh)
+    if result is None:
+        raise HTTPException(status_code=422, detail="清洗後無有效出貨資料可供預測")
+    if result.get("insufficient"):
+        raise HTTPException(status_code=422, detail="完整月數不足以預測（至少需 7 個完整月）")
+    return jsonsafe.clean(result)
+
+
+@router.get("/predicted_sku")
+def predicted_sku_abc(a_thresh: float = Query(70, ge=0, le=100), b_thresh: float = Query(90, ge=0, le=100),
+                       top_n: int = Query(15, ge=1, le=200),
+                       sess: state.SessionState = Depends(require_clean_result)):
+    """對應原前端 computePredictedSkuByZone()／renderPredictedSkuAbc()。predicted_sku_values()
+    這段（要對每個候選 SKU 個別跑一次最後一期 hold-out 驗證，數千個 SKU 時較貴）用
+    sess.cached() 存起來，拉 A/B 門檻滑桿不必重算，只有清洗結果改變才會失效重跑。"""
+    if b_thresh < a_thresh:
+        raise HTTPException(status_code=400, detail="b_thresh 必須大於等於 a_thresh")
+    raw = sess.cached(("pred_sku_raw",), lambda: an.predicted_sku_values(sess.cleaning_result.clean_df))
+    if raw.get("insufficient"):
+        raise HTTPException(status_code=422, detail="完整月數不足以預測（至少需 7 個完整月）")
+    result = an.classify_predicted_sku(raw, a_thresh, b_thresh)
+    top = {
+        "shelf": result["shelf"][:top_n], "pallet": result["pallet"][:top_n],
+        "shelf_total": len(result["shelf"]), "pallet_total": len(result["pallet"]),
+        "a_thresh": a_thresh, "b_thresh": b_thresh,
+    }
+    return jsonsafe.clean(top)
