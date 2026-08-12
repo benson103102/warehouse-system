@@ -7,3 +7,7 @@ python-calamine>=0.2   # 強烈建議：正式資料集「訂單資料」工作�
                         # 裝了這個之後 ingest.py 會自動優先用它（Rust 實作，快很多）。裝不起來也沒關係，會自動退回 openpyxl。
 python-multipart>=0.0.9
 pydantic>=2.7
+google-cloud-storage>=2.10   # 大檔案直傳用（見 ingest.py /upload_url／/upload_from_gcs）：
+                              # Cloud Run 對單一 HTTP 請求有 32MB 硬上限，超過的檔案改成讓瀏覽器
+                              # 直接 PUT 給 Google Cloud Storage、後端再從 GCS 讀，繞過這個限制。
+                              # 本機開發沒設定 WAREHOUSE_UPLOAD_BUCKET 時這條路徑不會被用到。

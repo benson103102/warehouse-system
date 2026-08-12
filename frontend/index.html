@@ -194,6 +194,10 @@ async function apiPost(path, opts){
   if(!r.ok){ const body = await r.json().catch(()=>({detail:r.statusText})); throw new Error(body.detail || ('HTTP '+r.status)); }
   return r.json();
 }
+// 帶 JSON body 的 POST（跟上面 apiPost 共用 401 處理／錯誤處理，只是 body 換成 JSON 字串）。
+async function apiPostJson(path, obj){
+  return apiPost(path, {body: JSON.stringify(obj), headers: {'Content-Type': 'application/json'}});
+}
 function escHtml(s){ return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function pct(v){ return (v==null?'—':v.toFixed(1)+'%'); }
 function num(v){ return (v==null?'—':Math.round(v).toLocaleString()); }
@@ -289,20 +293,51 @@ async function refreshImportStatus(){
     else if(s.status === 'processing') pollImportStatus();
   }catch(e){}
 }
+// 部署在 Cloud Run 時，單一請求超過這個大小會被平台擋下（回 413），跟後端設定無關、
+// 沒辦法調高，所以超過這個門檻（留一點餘裕給 32MB 上限）改走「直傳 Cloud Storage」路線
+// （見下面 doUpload 內的判斷、後端 /api/ingest/upload_url／/api/ingest/upload_from_gcs）。
+const DIRECT_UPLOAD_THRESHOLD_BYTES = 28 * 1024 * 1024; // 28MB
+
 async function doUpload(){
   const f = document.getElementById('fileInput').files[0];
   const msg = document.getElementById('importMsg');
   if(!f){ msg.innerHTML = `<div class="msg error">請先選擇檔案</div>`; return; }
-  msg.innerHTML = `<div class="msg info">上傳中…</div>`;
   try{
-    const fd = new FormData(); fd.append('file', f);
-    // 這支 API 只負責「接收檔案」，會立刻回應；實際解析在後端背景執行緒跑，
-    // 檔案很大（例如百萬列等級）時可能要好幾分鐘，所以改成下面輪詢 /api/ingest/status，
-    // 不要一直卡等這支 API 本身回應。
-    await apiPost('/api/ingest/upload', {body: fd});
+    if(f.size > DIRECT_UPLOAD_THRESHOLD_BYTES){
+      await doUploadDirect(f, msg);
+    } else {
+      msg.innerHTML = `<div class="msg info">上傳中…</div>`;
+      const fd = new FormData(); fd.append('file', f);
+      // 這支 API 只負責「接收檔案」，會立刻回應；實際解析在後端背景執行緒跑，
+      // 檔案很大（例如百萬列等級）時可能要好幾分鐘，所以改成下面輪詢 /api/ingest/status，
+      // 不要一直卡等這支 API 本身回應。
+      await apiPost('/api/ingest/upload', {body: fd});
+    }
     cleaned = false;
     pollImportStatus(0);
   }catch(e){ msg.innerHTML = `<div class="msg error">匯入失敗：${escHtml(e.message)}</div>`; }
+}
+// 大檔案直傳流程：① 跟後端要一個 Cloud Storage 直傳網址 → ② 瀏覽器直接 PUT 給那個網址
+// （不經過後端，繞開 Cloud Run 的請求大小上限）→ ③ 通知後端去讀、開始背景解析。
+// 後端沒設定 WAREHOUSE_UPLOAD_BUCKET（例如本機開發）時 ① 會回 501，這裡攔截、提示改用小檔案。
+async function doUploadDirect(f, msg){
+  const sizeMb = (f.size/1024/1024).toFixed(1);
+  msg.innerHTML = `<div class="msg info">檔案較大（${sizeMb}MB），改用直傳雲端硬碟方式上傳中，請稍候…</div>`;
+  let urlInfo;
+  try{
+    urlInfo = await apiPostJson('/api/ingest/upload_url', {filename: f.name});
+  }catch(e){
+    throw new Error(`無法取得直傳網址：${e.message}（若在本機開發、尚未設定 WAREHOUSE_UPLOAD_BUCKET，`+
+      `${sizeMb}MB 的檔案在本機是可以用一般上傳的，只有部署在 Cloud Run 上才有 32MB 限制）`);
+  }
+  const putRes = await fetch(urlInfo.upload_url, {
+    method: 'PUT',
+    headers: {'Content-Type': urlInfo.content_type},
+    body: f,
+  });
+  if(!putRes.ok) throw new Error(`直傳雲端硬碟失敗（HTTP ${putRes.status}），請重新整理頁面再試一次`);
+  msg.innerHTML = `<div class="msg info">已上傳到雲端暫存，通知後端開始解析…</div>`;
+  await apiPostJson('/api/ingest/upload_from_gcs', {object_name: urlInfo.object_name, filename: f.name});
 }
 async function pollImportStatus(elapsedSec){
   const msg = document.getElementById('importMsg');
