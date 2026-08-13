@@ -93,5 +93,9 @@ def predicted_sku_abc(a_thresh: float = Query(70, ge=0, le=100), b_thresh: float
         "shelf": result["shelf"][:top_n], "pallet": result["pallet"][:top_n],
         "shelf_total": len(result["shelf"]), "pallet_total": len(result["pallet"]),
         "a_thresh": a_thresh, "b_thresh": b_thresh,
+        # top_n（最多 200）只夠拿來畫表格；Pareto 曲線要畫到 100%，得對「全部」SKU 取樣，
+        # 所以這裡另外用跟 /api/abc/sku 相同的 _pareto() 對完整（未截斷）清單取樣，不受
+        # top_n 限制，前端直接拿這兩個欄位畫圖即可，不必自己用截斷後的清單湊曲線。
+        "pareto_shelf": _pareto(result["shelf"]), "pareto_pallet": _pareto(result["pallet"]),
     }
     return jsonsafe.clean(top)

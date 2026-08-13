@@ -3,178 +3,908 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>儲位配置與揀貨策略優化系統 — 前後端分離版（示範前端）</title>
+<title>儲位配置與揀貨策略優化系統 — 前後端分離版</title>
 <style>
   :root{
-    --surface-1:#fcfcfb; --surface-2:#ffffff; --page-plane:#f5f5f2;
-    --text-primary:#0b0b0b; --text-secondary:#52514e; --text-muted:#898781;
-    --border:rgba(11,11,11,0.10); --gridline:#e1e0d9;
-    --brand:#2a78d6; --good:#0ca30c; --warn:#eda100; --bad:#d03b3b;
-    --seq-1:#b7d3f6; --seq-2:#86b6ef; --seq-3:#5598e7; --seq-4:#2a78d6; --seq-5:#1c5cab; --seq-6:#104281;
-    --baseline:#c3c2b7; --critical:#d03b3b;  /* 倉儲平面圖用：牆線/未分配灰、基準點紅 */
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --surface-2:      #ffffff;
+    --page-plane:     #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    --series-1: #2a78d6; /* blue */
+    --series-2: #eb6834; /* orange */
+    --series-3: #1baf7a; /* aqua */
+    --series-4: #eda100; /* yellow */
+    --series-5: #e87ba4; /* magenta */
+    --series-6: #008300; /* green */
+    --series-7: #4a3aa7; /* violet */
+    --series-8: #e34948; /* red */
+    --seq-150: #b7d3f6;
+    --seq-250: #86b6ef;
+    --seq-350: #5598e7;
+    --seq-450: #2a78d6;
+    --seq-550: #1c5cab;
+    --seq-650: #104281;
+    --good:     #0ca30c;
+    --warning:  #fab219;
+    --serious:  #ec835a;
+    --critical: #d03b3b;
+    --success-text: #006300;
+  }
+  :root[data-theme="dark"]{
+    color-scheme: dark;
+    --surface-1:      #1a1a19;
+    --surface-2:      #212120;
+    --page-plane:     #0d0d0d;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --gridline:       #2c2c2a;
+    --baseline:       #383835;
+    --border:         rgba(255,255,255,0.10);
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #008300;
+    --series-7: #9085e9;
+    --series-8: #e66767;
+    --seq-150: #9ec5f4;
+    --seq-250: #6da7ec;
+    --seq-350: #3987e5;
+    --seq-450: #2a78d6;
+    --seq-550: #184f95;
+    --seq-650: #0d366b;
+    --good:     #0ca30c;
+    --warning:  #fab219;
+    --serious:  #ec835a;
+    --critical: #e66767;
+    --success-text: #0ca30c;
   }
   *{box-sizing:border-box;}
-  body{margin:0; font-family:-apple-system,"Segoe UI",Roboto,"PingFang TC","Microsoft JhengHei",sans-serif;
-       background:var(--page-plane); color:var(--text-primary);}
-  .app{display:flex; min-height:100vh;}
-  .sidebar{width:220px; flex:none; background:var(--surface-2); border-right:1px solid var(--border);
-           padding:16px 0; position:sticky; top:0; height:100vh; overflow-y:auto;}
-  .sidebar h1{font-size:15px; padding:0 16px 12px; margin:0; border-bottom:1px solid var(--border);}
-  .navitem{display:block; padding:10px 16px; cursor:pointer; color:var(--text-secondary); border-left:3px solid transparent;}
-  .navitem:hover{background:var(--page-plane);}
-  .navitem.active{color:var(--brand); border-left-color:var(--brand); background:var(--page-plane); font-weight:600;}
-  .navitem .desc{display:block; font-size:11px; color:var(--text-muted);}
-  .main{flex:1; padding:24px 32px; max-width:1100px;}
-  .apibar{display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-muted); margin-bottom:16px;}
-  .apibar input{font-size:12px; padding:4px 8px; border:1px solid var(--border); border-radius:4px; width:220px;}
-  .apibar .dot{width:8px; height:8px; border-radius:50%; background:var(--text-muted);}
-  .apibar .dot.ok{background:var(--good);} .apibar .dot.bad{background:var(--bad);}
-  h2{margin:0 0 4px;} .subtitle{color:var(--text-secondary); margin:0 0 20px; font-size:13px;}
-  .card{background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:16px; margin-bottom:16px;}
-  .card h3{margin:0 0 4px; font-size:14px;} .card-sub{color:var(--text-muted); font-size:12px; margin:0 0 10px;}
-  .grid{display:grid; gap:12px;} .grid-3{grid-template-columns:repeat(3,1fr);} .grid-2{grid-template-columns:repeat(2,1fr);}
-  .stat-tile .label{font-size:12px; color:var(--text-muted);} .stat-tile .value{font-size:24px; font-weight:700; margin-top:4px;}
-  .stat-tile .sub{font-size:12px; margin-top:6px;}
-  .ok-text{color:var(--good);} .bad-text{color:var(--bad);}
-  table.data-table{width:100%; border-collapse:collapse; font-size:12.5px;}
-  table.data-table th{text-align:left; padding:6px 8px; border-bottom:2px solid var(--border); color:var(--text-secondary); position:sticky; top:0; background:var(--surface-2);}
-  table.data-table td{padding:6px 8px; border-bottom:1px solid var(--gridline);}
-  .table-scroll{max-height:360px; overflow:auto; border:1px solid var(--gridline); border-radius:6px;}
-  .chip{display:inline-block; padding:1px 8px; border-radius:20px; font-size:11px; font-weight:700;}
-  .chip.A{background:#fbe0da; color:#b5391a;} .chip.B{background:#fdedcf; color:#8a6100;} .chip.C{background:#dff0d8; color:#2c6b2c;}
-  button{background:var(--brand); color:#fff; border:none; border-radius:6px; padding:8px 16px; font-size:13px; cursor:pointer;}
-  button.secondary{background:var(--surface-2); color:var(--text-primary); border:1px solid var(--border);}
-  button:disabled{opacity:0.5; cursor:not-allowed;}
-  input[type=file]{font-size:13px;}
-  input[type=range]{width:100%;}
-  label{font-size:12px; color:var(--text-secondary); display:block; margin-bottom:4px;}
-  .row{display:flex; gap:20px; flex-wrap:wrap;}
-  .field{margin-bottom:14px; min-width:160px;}
-  .field input[type=number]{width:100%; padding:6px 8px; border:1px solid var(--border); border-radius:6px;}
-  .msg{padding:10px 14px; border-radius:8px; font-size:13px; margin-bottom:14px;}
-  .msg.info{background:#e8f1fc; color:#1c5cab;} .msg.error{background:#fbe0da; color:#b5391a;} .msg.success{background:#dff0d8; color:#2c6b2c;}
-  .zone-label{font-size:11px; fill:var(--text-muted);}
-  .empty{color:var(--text-muted); font-size:13px; padding:20px; text-align:center;}
-  /* 系統作業流程圖（總覽）：自原始單檔移植 */
-  .flow{display:flex; align-items:stretch; gap:0; flex-wrap:wrap;}
-  .flow-node{flex:1; min-width:120px; background:var(--page-plane); border:1px solid var(--border); border-radius:12px; padding:12px;}
-  .flow-node .fn-num{width:20px; height:20px; border-radius:50%; background:var(--brand); color:#fff; font-size:10.5px; font-weight:700; display:flex; align-items:center; justify-content:center; margin-bottom:8px;}
-  .flow-node .fn-title{font-size:12.5px; font-weight:700; margin-bottom:2px;}
-  .flow-node .fn-desc{font-size:10.5px; color:var(--text-muted); line-height:1.5;}
-  .flow-arrow{display:flex; align-items:center; justify-content:center; width:22px; color:var(--text-muted); font-size:14px;}
-  code{background:var(--page-plane); padding:1px 6px; border-radius:4px; font-size:12px;}
-  /* 倉儲平面圖滑鼠提示（自原始單檔移植）*/
-  .tooltip{ position:absolute; pointer-events:none; background:var(--text-primary); color:var(--surface-1);
-    font-size:11px; padding:6px 9px; border-radius:7px; opacity:0; transition:opacity .1s; z-index:200; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  html,body{margin:0;padding:0;}
+  body{
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    background: var(--page-plane);
+    color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+  }
+  a{color:inherit;}
+  button{font-family:inherit;}
+
+  /* ---------- Shell layout ---------- */
+  .shell{ display:grid; grid-template-columns: 240px 1fr; grid-template-rows: 56px 1fr; min-height:100vh; }
+  header.topbar{
+    grid-column: 1/3; grid-row:1;
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 0 20px; background: var(--surface-1); border-bottom:1px solid var(--border);
+    position:sticky; top:0; z-index:20;
+  }
+  .brand{ display:flex; align-items:center; gap:10px; }
+  .brand .mark{ width:28px;height:28px;border-radius:7px; background: linear-gradient(135deg, var(--series-1), var(--series-3)); flex:none; display:flex; align-items:center; justify-content:center; }
+  .brand .name{ font-weight:600; font-size:14.5px; line-height:1.25; }
+  .brand .sub{ font-size:11.5px; color:var(--text-muted); }
+  .topbar-right{ display:flex; align-items:center; gap:10px; }
+  .proto-badge{ font-size:11px; padding:3px 9px; border-radius:100px; background: color-mix(in srgb, var(--series-4) 18%, transparent); color: var(--text-primary); border:1px solid var(--border); font-weight:600; letter-spacing:.02em; }
+  .icon-btn{ width:32px;height:32px;border-radius:8px;border:1px solid var(--border); background:var(--surface-2); color:var(--text-secondary); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:15px; }
+  .icon-btn:hover{ background: var(--gridline); }
+
+  nav.sidebar{
+    grid-column:1; grid-row:2;
+    background: var(--surface-1); border-right:1px solid var(--border);
+    padding: 14px 10px 14px; overflow-y:auto;
+    position:sticky; top:56px; align-self:start; height:calc(100vh - 56px);
+  }
+  .nav-step{
+    display:flex; align-items:flex-start; gap:10px; padding:9px 10px; border-radius:10px;
+    cursor:pointer; margin-bottom:2px; position:relative;
+  }
+  .nav-step:hover{ background: var(--gridline); }
+  .nav-step.active{ background: color-mix(in srgb, var(--series-1) 13%, transparent); }
+  .nav-step.active .step-title{ color: var(--series-1); font-weight:700;}
+  :root[data-theme="dark"] .nav-step.active .step-title{ color:#7fb1ee; }
+  .step-dot{
+    width:22px;height:22px;border-radius:50%; flex:none; margin-top:1px;
+    display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700;
+    background: var(--surface-2); border:1.5px solid var(--baseline); color:var(--text-muted);
+  }
+  .nav-step.done .step-dot{ background: var(--good); border-color:var(--good); color:#fff; }
+  .nav-step.active .step-dot{ border-color: var(--series-1); color:var(--series-1); }
+  .step-title{ font-size:13px; font-weight:600; color: var(--text-primary); line-height:1.35; }
+  .step-desc{ font-size:11px; color:var(--text-muted); margin-top:1px; }
+  .nav-rail{ position:absolute; left:20px; top:31px; width:1.5px; height:20px; background:var(--gridline); }
+
+  main.content{ grid-column:2; grid-row:2; padding: 22px 28px 60px; max-width:1180px; }
+  section.screen{ display:none; animation: fadein .25s ease; }
+  section.screen.active{ display:block; }
+  @keyframes fadein{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;} }
+
+  .page-head{ margin-bottom:18px; }
+  .page-head h1{ font-size:20px; margin:0 0 4px; font-weight:700; }
+  .page-head p{ font-size:13px; color:var(--text-secondary); margin:0; max-width:760px; line-height:1.6;}
+
+  .grid{ display:grid; gap:14px; }
+  .grid-2{ grid-template-columns: 1fr 1fr; }
+  .grid-3{ grid-template-columns: repeat(3,1fr); }
+  .grid-4{ grid-template-columns: repeat(4,1fr); }
+  @media(max-width:1000px){ .grid-2,.grid-3,.grid-4{grid-template-columns:1fr;} }
+
+  .card{
+    background: var(--surface-1); border:1px solid var(--border); border-radius:14px;
+    padding:16px 18px;
+  }
+  .card h3{ font-size:13.5px; margin:0 0 3px; font-weight:700; }
+  .card .card-sub{ font-size:11.5px; color:var(--text-muted); margin:0 0 12px; }
+  .card + .card{ margin-top:0; }
+
+  /* stat tile */
+  .stat-tile .label{ font-size:12px; color:var(--text-secondary); font-weight:600; }
+  .stat-tile .value{ font-size:30px; font-weight:650; margin-top:4px; letter-spacing:-0.01em; }
+  .stat-tile .delta{ font-size:12px; font-weight:700; margin-top:4px; display:inline-flex; align-items:center; gap:3px;}
+  .stat-tile .delta.good{ color: var(--success-text); }
+  .stat-tile .delta.bad{ color: var(--critical); }
+  .stat-tile .meter-track{ height:6px; border-radius:4px; background: var(--gridline); margin-top:10px; position:relative; overflow:visible;}
+  .stat-tile .meter-fill{ height:6px; border-radius:4px; background: var(--series-1); transition: width .5s ease;}
+  .stat-tile .meter-target{ position:absolute; top:-3px; width:2px; height:12px; background: var(--text-primary); opacity:.55; }
+  .stat-tile .meter-labels{ display:flex; justify-content:space-between; font-size:10.5px; color:var(--text-muted); margin-top:4px;}
+
+  /* buttons */
+  .btn{ border-radius:9px; border:1px solid var(--border); background:var(--surface-2); color:var(--text-primary); font-size:12.5px; font-weight:600; padding:9px 14px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+  .btn:hover{ background:var(--gridline); }
+  .btn-primary{ background: var(--series-1); color:#fff; border-color:transparent; }
+  .btn-primary:hover{ filter:brightness(1.06); }
+  .btn-row{ display:flex; gap:10px; margin-top:18px; }
+  .btn[disabled]{ opacity:.45; cursor:not-allowed; }
+
+  /* pipeline flow (overview) */
+  .flow{ display:flex; align-items:stretch; gap:0; flex-wrap:wrap; }
+  .flow-node{ flex:1; min-width:120px; background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:12px 12px; position:relative; }
+  .flow-node .fn-num{ width:20px;height:20px;border-radius:50%; background:var(--series-1); color:#fff; font-size:10.5px; font-weight:700; display:flex; align-items:center; justify-content:center; margin-bottom:8px;}
+  .flow-node .fn-title{ font-size:12.5px; font-weight:700; margin-bottom:2px;}
+  .flow-node .fn-desc{ font-size:10.5px; color:var(--text-muted); line-height:1.5;}
+  .flow-arrow{ display:flex; align-items:center; justify-content:center; width:22px; color:var(--text-muted); font-size:14px;}
+
+  /* dropzone */
+  .dropzone{
+    border:1.5px dashed var(--baseline); border-radius:14px; padding:34px 20px; text-align:center;
+    background: var(--surface-2); cursor:pointer; transition: border-color .15s, background .15s;
+  }
+  .dropzone.drag{ border-color: var(--series-1); background: color-mix(in srgb, var(--series-1) 6%, var(--surface-2)); }
+  .dropzone .dz-icon{ font-size:26px; margin-bottom:8px; }
+  .dropzone .dz-title{ font-size:13.5px; font-weight:700; margin-bottom:3px;}
+  .dropzone .dz-sub{ font-size:11.5px; color:var(--text-muted); }
+
+  table.data-table{ width:100%; border-collapse:collapse; font-size:12px; }
+  table.data-table th{ text-align:left; font-weight:700; color:var(--text-secondary); padding:7px 9px; border-bottom:1.5px solid var(--baseline); white-space:nowrap; position:sticky; top:0; background:var(--surface-1); }
+  table.data-table td{ padding:6px 9px; border-bottom:1px solid var(--gridline); white-space:nowrap; font-variant-numeric:tabular-nums; color:var(--text-primary); }
+  table.data-table tr:hover td{ background: var(--page-plane); }
+  .table-scroll{ max-height:320px; overflow:auto; border:1px solid var(--border); border-radius:10px; }
+  td.flag-bad{ color: var(--critical); font-weight:700; }
+  td.muted{ color:var(--text-muted); }
+
+  .chip{ display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; padding:3px 9px; border-radius:100px; }
+  .chip.ok{ background: color-mix(in srgb, var(--good) 15%, transparent); color: var(--success-text); }
+  .chip.warn{ background: color-mix(in srgb, var(--warning) 22%, transparent); color:#8a5a00; }
+  :root[data-theme="dark"] .chip.warn{ color:#fab219; }
+  .chip.bad{ background: color-mix(in srgb, var(--critical) 15%, transparent); color: var(--critical); }
+  .chip .dot{ width:6px;height:6px;border-radius:50%; background:currentColor; }
+
+  .checklist{ display:flex; flex-direction:column; gap:9px; }
+  .checkrow{ display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:var(--surface-2); }
+  .checkrow .cr-left{ display:flex; align-items:center; gap:10px; }
+  .checkrow input[type=checkbox]{ width:16px;height:16px; accent-color: var(--series-1); }
+  .checkrow .cr-title{ font-size:12.5px; font-weight:600; }
+  .checkrow .cr-sub{ font-size:11px; color:var(--text-muted); }
+  .checkrow .cr-count{ font-size:12px; font-weight:700; font-variant-numeric:tabular-nums; }
+
+  .slider-row{ margin-bottom:16px; }
+  .slider-row:last-child{ margin-bottom:0; }
+  .slider-label{ display:flex; justify-content:space-between; font-size:12px; font-weight:600; margin-bottom:6px; }
+  .slider-label .val{ color:var(--series-1); font-variant-numeric:tabular-nums; }
+  input[type=range]{ width:100%; accent-color: var(--series-1); height:4px; }
+
+  .tabbar{ display:flex; gap:4px; border-bottom:1px solid var(--border); margin-bottom:14px; }
+  .tabbtn{ padding:8px 14px; font-size:12.5px; font-weight:600; color:var(--text-muted); background:none; border:none; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; }
+  .tabbtn.active{ color:var(--series-1); border-bottom-color:var(--series-1); }
+
+  .legend-row{ display:flex; gap:16px; flex-wrap:wrap; margin-top:10px; font-size:11.5px; color:var(--text-secondary); }
+  .legend-item{ display:flex; align-items:center; gap:6px; }
+  .legend-swatch{ width:10px;height:10px;border-radius:3px; flex:none;}
+
+  .tooltip{
+    position:absolute; pointer-events:none; background: var(--text-primary); color: var(--surface-1);
+    font-size:11px; padding:6px 9px; border-radius:7px; opacity:0; transition:opacity .1s; z-index:30; white-space:nowrap; font-variant-numeric:tabular-nums;
+  }
   .tooltip.show{ opacity:1; }
-  .wh-map{ width:100%; }
-  .wh-legend{ display:flex; flex-wrap:wrap; gap:14px; font-size:12px; color:var(--text-secondary); margin-top:10px; }
-  .wh-legend .sw{ display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:5px; vertical-align:-1px; }
-  /* 登入畫面 */
-  #authGate{position:fixed; inset:0; background:var(--page-plane); display:flex; align-items:center; justify-content:center; z-index:100;}
-  .auth-card{background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:28px; width:340px; box-shadow:0 8px 30px rgba(0,0,0,0.08);}
-  .auth-card h2{font-size:18px; margin:0 0 4px;}
-  .auth-card p.sub{font-size:12.5px; color:var(--text-muted); margin:0 0 18px;}
-  .auth-card label{margin-top:10px;}
-  .auth-card input{width:100%; padding:9px 10px; border:1px solid var(--border); border-radius:6px; font-size:14px;}
-  .auth-card button{width:100%; margin-top:16px; padding:10px;}
-  .auth-toggle{margin-top:14px; font-size:12.5px; color:var(--text-secondary); text-align:center;}
-  .auth-toggle a{color:var(--brand); cursor:pointer; text-decoration:underline;}
-  .userbox{margin-left:auto; display:flex; align-items:center; gap:10px; font-size:12px; color:var(--text-secondary);}
+
+  .assumption-panel{ background: var(--surface-2); border:1px dashed var(--baseline); border-radius:12px; padding:12px 14px; font-size:11.5px; color:var(--text-secondary); line-height:1.7; }
+  .assumption-panel b{ color:var(--text-primary); }
+  .assumption-panel summary{ cursor:pointer; font-weight:700; font-size:12px; color:var(--text-primary); }
+
+  .kv{ display:flex; justify-content:space-between; font-size:12px; padding:6px 0; border-bottom:1px solid var(--gridline); }
+  .kv:last-child{ border-bottom:none; }
+  .kv .k{ color:var(--text-muted); }
+  .kv .v{ font-weight:700; font-variant-numeric:tabular-nums; }
+
+  .wh-map{ background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:10px; }
+  .rack{ transition: fill .3s ease; }
+  .zone-label{ font-size:9px; fill: var(--text-muted); }
+
+  .param-radio{ display:flex; gap:8px; margin-bottom:14px; }
+  .param-radio label{ flex:1; text-align:center; font-size:12px; font-weight:600; padding:8px; border:1px solid var(--border); border-radius:9px; cursor:pointer; background:var(--surface-2); }
+  .param-radio input{ display:none; }
+  .param-radio input:checked + span{ color: var(--series-1); }
+  .param-radio label:has(input:checked){ border-color: var(--series-1); background: color-mix(in srgb, var(--series-1) 10%, var(--surface-2)); }
+
+  .scenario-table td, .scenario-table th{ text-align:center; }
+  .scenario-table td:first-child, .scenario-table th:first-child{ text-align:left; }
+  .badge-scenario{ font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:100px;}
+  .footnote{ font-size:11px; color:var(--text-muted); margin-top:10px; line-height:1.6;}
+
+  ::-webkit-scrollbar{ width:9px; height:9px; }
+  ::-webkit-scrollbar-thumb{ background: var(--baseline); border-radius:6px; }
+  ::-webkit-scrollbar-track{ background: transparent; }
+
+  .subtabbar{ display:flex; gap:4px; margin-bottom:12px; }
+  .subtabbtn{ padding:6px 12px; font-size:11.5px; font-weight:600; color:var(--text-secondary); background:var(--surface-2); border:1px solid var(--border); border-radius:8px; cursor:pointer; }
+  .subtabbtn.active{ background:var(--series-1); color:#fff; border-color:var(--series-1); }
+  .section-note{ font-size:11.5px; color:var(--text-muted); margin-top:8px; line-height:1.7; }
+  details.cat-table summary{ cursor:pointer; font-weight:700; font-size:12.5px; padding:4px 0; }
+  .mini-kv-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+  @media(max-width:1000px){ .mini-kv-grid{grid-template-columns:repeat(2,1fr);} }
+  .rule-row{ display:grid; grid-template-columns: 26px 1fr 90px; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid var(--gridline); }
+  .rule-row:last-child{ border-bottom:none; }
+  .rule-num{ width:22px;height:22px;border-radius:50%; background:var(--surface-2); border:1.5px solid var(--baseline); color:var(--text-muted); font-size:10.5px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+  .rule-title{ font-size:12px; font-weight:600; }
+  .rule-sub{ font-size:10.5px; color:var(--text-muted); margin-top:2px; }
+  .rule-count{ font-size:13px; font-weight:700; text-align:right; font-variant-numeric:tabular-nums; }
+  .loading-overlay{ display:flex; align-items:center; gap:10px; padding:14px 16px; border-radius:10px; background:color-mix(in srgb, var(--series-1) 8%, var(--surface-2)); border:1px solid var(--border); font-size:12.5px; color:var(--text-primary); }
+  .spinner{ width:14px;height:14px;border-radius:50%; border:2px solid var(--baseline); border-top-color:var(--series-1); animation:spin .7s linear infinite; flex:none; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+/* ---- 相容別名：沿用自後端 API 版既有圖表繪製函式（lineChart／barChart／paretoCurve...）
+   內部直接寫 var(--brand)／var(--seq-1)…／var(--warn)／var(--bad)，這裡對應到原型的
+   --series-1／--seq-150…／--warning／--critical，兩邊配色系統合併為同一份 token。---- */
+:root{
+  --brand: var(--series-1);
+  --seq-1: var(--seq-150); --seq-2: var(--seq-250); --seq-3: var(--seq-350);
+  --seq-4: var(--seq-450); --seq-5: var(--seq-550); --seq-6: var(--seq-650);
+  --warn: var(--warning); --bad: var(--critical);
+}
+.empty{ padding:26px; text-align:center; color:var(--text-muted); font-size:12.5px; }
+.ok-text{ color: var(--success-text); } .bad-text{ color: var(--critical); }
+.wh-legend{ display:flex; flex-wrap:wrap; gap:14px; font-size:12px; color:var(--text-secondary); margin-top:10px; }
+.wh-legend .sw{ display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:5px; vertical-align:-1px; }
+
+/* ---- 登入畫面（原型無此頁面，因原型不需要後端帳號；沿用卡片視覺語言自製） ---- */
+#authGate{ position:fixed; inset:0; background:var(--page-plane); display:flex; align-items:center; justify-content:center; z-index:100; }
+.auth-card{ background:var(--surface-1); border:1px solid var(--border); border-radius:14px; padding:28px; width:340px; box-shadow:0 8px 30px rgba(0,0,0,0.10); }
+.auth-card h2{ font-size:18px; margin:0 0 4px; font-weight:700; }
+.auth-card p.sub{ font-size:12.5px; color:var(--text-muted); margin:0 0 18px; }
+.auth-card label{ font-size:12px; color:var(--text-secondary); display:block; margin:12px 0 4px; }
+.auth-card input{ width:100%; padding:9px 10px; border:1px solid var(--border); border-radius:8px; font-size:14px; background:var(--surface-2); color:var(--text-primary); }
+.auth-card .btn{ width:100%; margin-top:16px; justify-content:center; padding:10px; }
+.auth-toggle{ margin-top:14px; font-size:12.5px; color:var(--text-secondary); text-align:center; }
+.auth-toggle a{ color:var(--series-1); cursor:pointer; text-decoration:underline; }
+
+/* ---- topbar 右側：後端連線狀態、帳號、後端網址設定（原型無此列，因原型無後端） ---- */
+.conn-dot{ width:8px; height:8px; border-radius:50%; background:var(--text-muted); flex:none; }
+.conn-dot.ok{ background:var(--good); } .conn-dot.bad{ background:var(--critical); }
+.userbox{ font-size:12px; color:var(--text-secondary); white-space:nowrap; }
+#apiSettingsPanel{ min-width:280px; }
+#apiSettingsPanel label{ font-size:12px; color:var(--text-secondary); display:block; margin-bottom:4px; }
+#apiSettingsPanel input{ width:100%; padding:7px 9px; border:1px solid var(--border); border-radius:7px; font-size:12.5px; background:var(--surface-2); color:var(--text-primary); margin-bottom:8px; }
+
 </style>
 </head>
 <body>
 <div class="tooltip" id="globalTooltip"></div>
+
+<!-- 登入畫面：原型是純前端展示原型、不需要帳號；後端分離版有多使用者資料隔離，需要登入。
+     視覺上沿用本頁其餘畫面共用的卡片／按鈕／輸入框樣式（.card／.btn／.btn-primary），
+     盡量融入同一套視覺語言，而非另外一種風格。 -->
 <div id="authGate" style="display:none;">
   <div class="auth-card">
     <h2 id="authTitle">登入</h2>
     <p class="sub">儲位配置與揀貨策略優化系統</p>
-    <div id="authError" class="msg error" style="display:none;"></div>
+    <div id="authError" class="chip bad" style="display:none; width:100%; box-sizing:border-box; padding:8px 12px; margin-bottom:4px;"></div>
     <label>Email</label>
     <input id="authEmail" type="email" autocomplete="username" placeholder="you@example.com">
     <label>密碼</label>
     <input id="authPassword" type="password" autocomplete="current-password" placeholder="至少 6 個字元">
-    <button id="authSubmit" onclick="submitAuth()">登入</button>
+    <button class="btn btn-primary" id="authSubmit" onclick="submitAuth()">登入</button>
     <div class="auth-toggle" id="authToggle"></div>
   </div>
 </div>
-<div class="app" id="appRoot" style="display:none;">
-  <div class="sidebar">
-    <h1>儲位配置優化系統<br><span style="font-weight:400; font-size:11px; color:var(--text-muted);">前後端分離示範</span></h1>
-    <div id="nav"></div>
-  </div>
-  <div class="main">
-    <div class="apibar">
-      <span class="dot" id="apiDot"></span>
-      <span>後端網址：</span>
-      <input id="apiBaseInput" value="http://127.0.0.1:8000">
-      <button class="secondary" style="padding:4px 10px;" onclick="setApiBase()">套用</button>
-      <span id="apiStatusText"></span>
-      <span class="userbox"><span id="userEmail"></span>
-        <button class="secondary" style="padding:4px 10px;" onclick="doLogout()">登出</button></span>
+
+<div class="shell" id="appRoot" style="display:none;">
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="mark"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V8l9-4 9 4v13"/><path d="M3 21h18"/><rect x="9.5" y="12.5" width="5" height="8.5"/><line x1="9.5" y1="15.3" x2="14.5" y2="15.3"/><line x1="9.5" y1="18.1" x2="14.5" y2="18.1"/></svg></div>
+      <div>
+        <div class="name">儲位配置與揀貨策略優化系統</div>
+      </div>
     </div>
-    <div id="screen"></div>
+    <div class="topbar-right">
+      <span class="userbox" id="userEmail"></span>
+      <span class="conn-dot" id="apiDot" title="後端連線狀態"></span>
+      <button class="icon-btn" id="apiSettingsToggle" title="後端網址設定" onclick="toggleApiSettings()">⚙️</button>
+      <button class="icon-btn" title="登出" onclick="doLogout()">⎋</button>
+      <button class="icon-btn" id="themeToggle" title="切換深色模式">🌙</button>
+    </div>
+  </header>
+
+  <div id="apiSettingsPanel" class="card" style="display:none; position:fixed; top:64px; right:20px; z-index:40;">
+    <label>後端網址</label>
+    <input id="apiBaseInput" value="http://127.0.0.1:8000">
+    <div style="display:flex; gap:8px; align-items:center;">
+      <button class="btn btn-primary" style="flex:1;" onclick="setApiBase()">套用</button>
+      <span id="apiStatusText" style="font-size:11.5px; color:var(--text-muted);"></span>
+    </div>
   </div>
+
+  <nav class="sidebar" id="sidebar"></nav>
+
+  <main class="content" id="content">
+
+    <section class="screen" id="screen-overview" data-title="總覽" data-desc="專案目標與作業流程">
+      <div class="page-head">
+        <h1>P零售物流「統倉店配」智慧作業優化 — 分析原型</h1>
+        <p>將門市出貨訂單資料匯入後，依序完成資料清洗、需求預測、ABC 熱度分級與共同揀取分析、批次併單模擬、儲位與人工／AGV 情境模擬，最終以 KPI 儀表板呈現改善前後成果。整體邏輯呼應「需求預測 → 儲位配置 → 最佳揀貨」的倉儲作業優化思路：先由歷史出貨量預估未來需求走勢，再據此調整熱門商品的儲位與揀貨策略。以下畫面為互動原型，供操作流程與版面確認之用。</p>
+      </div>
+
+      <div class="grid grid-3" style="margin-bottom:14px;">
+        <div class="card stat-tile">
+          <div class="label">🎯 相對移動距離改善目標</div>
+          <div class="value">≥ 10%</div>
+          <div class="card-sub" style="margin-top:6px;">儲位區域及揀貨順序調整後</div>
+        </div>
+        <div class="card stat-tile">
+          <div class="label">🎯 揀貨回合數改善目標</div>
+          <div class="value">≥ 10%</div>
+          <div class="card-sub" style="margin-top:6px;">採用批次併單規則後</div>
+        </div>
+        <div class="card stat-tile">
+          <div class="label">🎯 總揀貨工時改善目標</div>
+          <div class="value">≥ 5%</div>
+          <div class="card-sub" style="margin-top:6px;">批次併單與儲位調整後</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:14px;">
+        <h3>系統作業流程</h3>
+        <p class="card-sub">CSV／XLSX 匯入 → 欄位與格式檢查 → 資料清洗 → 需求預測 → 儲位配置分析 → 批次與儲位情境模擬 → KPI 視覺化</p>
+        <div class="flow" id="flowDiagram"></div>
+      </div>
+
+      <div class="grid grid-2">
+        <div class="card">
+          <h3>個案資料概況</h3>
+          <p class="card-sub">來源：門市出貨訂單明細檔（P零售物流data.xlsx）</p>
+          <div class="kv"><span class="k">訂單筆數（系統出貨單號）</span><span class="v">142,607 筆</span></div>
+          <div class="kv"><span class="k">訂單明細列數（原始，清洗前）</span><span class="v">約 1,048,575 列</span></div>
+          <div class="kv"><span class="k">乾淨資料列數（清洗後）</span><span class="v">1,040,990 列</span></div>
+          <div class="kv"><span class="k">商品 SKU 數</span><span class="v">5,672 項</span></div>
+          <div class="kv"><span class="k">門市家數</span><span class="v">2,033 家</span></div>
+          <div class="kv"><span class="k">商品類別數</span><span class="v">69 碼固定對照表（51 類實際有出貨紀錄）</span></div>
+          <div class="kv"><span class="k">資料涵蓋期間</span><span class="v">2024/05 – 2026/05</span></div>
+        </div>
+        <div class="card">
+          <h3>專案範疇與限制</h3>
+          <p class="card-sub">依專案章程界定，模擬結果僅供方案比較與投資評估參考</p>
+          <ul style="margin:0; padding-left:18px; font-size:12px; color:var(--text-secondary); line-height:2;">
+            <li>本階段不串接 ERP／WMS，不進行即時庫存扣帳</li>
+            <li>無實際 SKU－儲位、儲位容量與走道距離資料，以基準情境模擬</li>
+            <li>人工／AGV 數量、速度、處理時間採可調參數，非實測值</li>
+            <li>相同資料與參數下，模擬結果可重複產生</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="goScreen('import')">開始：匯入資料 →</button>
+      </div>
+    </section>
+
+    <!-- ================= 1. IMPORT ================= -->
+    <section class="screen" id="screen-import" data-title="資料匯入" data-desc="匯入 xlsx／csv 並檢查欄位格式">
+      <div class="page-head">
+        <h1>1｜資料匯入</h1>
+        <p>拖曳或選擇門市出貨訂單檔（.xlsx／.csv）；系統將自動偵測欄位、資料型別與缺漏比例。若尚未備妥檔案，可先載入個案範例資料體驗流程。</p>
+      </div>
+
+      <div class="grid grid-2" style="align-items:start;">
+        <div class="card">
+          <h3>上傳檔案</h3>
+          <p class="card-sub">支援 .xlsx / .xlsm / .csv，檔案會上傳到後端伺服器解析（僅供這個帳號的 session 使用，不會分享給其他使用者）</p>
+          <div class="dropzone" id="dropzone">
+            <div class="dz-icon">📄</div>
+            <div class="dz-title">拖放檔案到此處，或點擊選擇</div>
+            <div class="dz-sub">支援完整全量檔案（例如 P零售物流data.xlsx，約 90MB／104萬列，已逼近 Excel 單一工作表列數上限）；上傳後由後端在背景執行緒解析，資料量大時可能需要數分鐘，畫面會顯示進度、可先切換到其他頁面。<b>大檔案直傳（僅正式部署適用）：</b>連到 127.0.0.1／localhost 的本機後端一律用一般上傳，不會消耗雲端額度；只有連到部署在 Cloud Run 的網址、且檔案超過 28MB 時，才會自動改走直傳雲端硬碟（繞過伺服器 32MB 請求上限），全程不需手動操作。</div>
+          </div>
+          <input type="file" id="fileInput" accept=".xlsx,.xlsm,.csv" style="display:none">
+          <div class="btn-row" style="margin-top:12px;">
+            <button class="btn" onclick="loadSampleData()">📎 載入個案範例資料（快速展示用）</button>
+            <button class="btn" id="clearDataBtn" onclick="clearData()" disabled>清除</button>
+          </div>
+
+          <div id="importStatus" style="margin-top:12px; font-size:12px; color:var(--text-muted);">尚未匯入資料</div>
+          <div id="importProgress" style="margin-top:12px; display:none;"></div>
+        </div>
+
+        <div class="card">
+          <h3>檔案資訊</h3>
+          <p class="card-sub">解析後的資料集摘要</p>
+          <div id="fileMetaBox">
+            <div class="kv"><span class="k">檔名</span><span class="v">—</span></div>
+            <div class="kv"><span class="k">工作表</span><span class="v">—</span></div>
+            <div class="kv"><span class="k">列數</span><span class="v">—</span></div>
+            <div class="kv"><span class="k">欄位數</span><span class="v">—</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:14px; display:none;" id="mappingCard">
+        <h3>欄位對應（依訂單資料 18 欄固定結構自動偵測，可手動調整）</h3>
+        <p class="card-sub">資料清洗腳本（P零售物流data_清洗腳本.py）以此 18 個固定欄位為準；下游的清洗、儲位配置、批次併單、儲位模擬皆依此欄位對應計算</p>
+        <div id="mappingGrid"></div>
+      </div>
+
+      <div class="card" style="margin-top:14px;">
+        <h3>欄位格式檢查</h3>
+        <p class="card-sub">正式清洗前的初步檢查；完整的 8 條隔離規則將於「資料清洗」頁面執行</p>
+        <div class="checklist" id="schemaChecklist">
+          <div class="checkrow"><div class="cr-left"><div class="cr-title">尚未匯入資料</div></div></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:14px;">
+        <h3>資料預覽</h3>
+        <p class="card-sub" id="previewSub">前 10 列</p>
+        <div class="table-scroll"><table class="data-table" id="previewTable"></table></div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn" onclick="goScreen('overview')">← 上一步</button>
+        <button class="btn btn-primary" id="toCleanBtn" onclick="goScreen('clean')" disabled>下一步：資料清洗 →</button>
+      </div>
+    </section>
+
+    <!-- ================= 2. CLEAN ================= -->
+    <section class="screen" id="screen-clean" data-title="資料清洗" data-desc="8條隔離規則、關鍵字重分類">
+      <div class="page-head">
+        <h1>2｜資料清洗</h1>
+        <p>完整比照 P零售物流data_清洗腳本.py（Part 1~18）之邏輯：8 條優先序隔離規則（依序判定、每列僅記錄第一個命中的原因）、69 碼固定商品類別對照表、缺值多數決補齊、隔離資料關鍵字重分類（含移回乾淨資料前重新檢查數量／單位）、商品名稱非描述性代號隔離、材積（長寬高）清洗與貨架/棧板儲位分類、配送地址縣市／區域補齊。所有規則固定套用（非示範用開關），結果可與正式腳本輸出之 P零售物流data_清理結果.xlsx 對照。</p>
+      </div>
+      <div id="cleanRunStatus"></div>
+
+      <div class="grid grid-4" style="margin-bottom:14px;" id="cleanStatTiles"></div>
+
+      <div class="grid grid-2" style="align-items:start;">
+        <div class="card">
+          <h3>8 條隔離規則命中統計</h3>
+          <p class="card-sub">依「隔離主要原因」統計（互斥，每列僅計入第一個命中的規則）</p>
+          <div id="ruleHitList"></div>
+        </div>
+        <div class="card">
+          <h3>隔離資料關鍵字重分類</h3>
+          <p class="card-sub">針對規則5（商品類別缺值且無法分類）的隔離列，依商品名稱關鍵字規則重新判定類別</p>
+          <div id="reclassSummary"></div>
+          <div class="assumption-panel" style="margin-top:12px;">
+            命中規則者：類別重新指派並移回「乾淨資料」。命中「測試商品」等佔位字樣者：不分類、維持隔離。規則未命中者：維持隔離，待人工覆核。
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-2" style="align-items:start; margin-top:14px;">
+        <div class="card">
+          <h3>材積清洗（長／寬／高）＋ 貨架/棧板儲位分類</h3>
+          <p class="card-sub">Part 9/10/13/15/16：數值化→負值取絕對值→0視為缺值→極端值(&gt;200cm)判定→同商品ID眾數回填／同類別範圍校正（校正結果不得超過極端值門檻）→共用可疑值(疑似測試/預設值)排除→同類別中位數推估缺維度→材積&gt;50L或最長邊&gt;60cm歸棧板，其餘歸貨架</p>
+          <div id="materialSummary"></div>
+        </div>
+        <div class="card">
+          <h3>配送地址縣市／區域補齊</h3>
+          <p class="card-sub">Part 18：新舊制行政區更名正規化→共用預設值(稀疏配對)排除→同門市代碼可信版本(單一/依出貨日期挑選多版本)回填→查無可信版本標記待確認，供區域併單策略使用</p>
+          <div id="addressSummary"></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:14px;">
+        <h3>商品材積主檔（一個商品ID一列，供 ABC 分組／儲位配置使用）</h3>
+        <p class="card-sub" id="skuDimSub">—</p>
+        <div class="table-scroll"><table class="data-table" id="skuDimTable"></table></div>
+      </div>
+
+      <div class="card" style="margin-top:14px;">
+        <h3>隔離資料明細</h3>
+        <p class="card-sub" id="isoPreviewSub">—</p>
+        <div class="table-scroll"><table class="data-table" id="isoPreviewTable"></table></div>
+      </div>
+
+      <div class="card" style="margin-top:14px;">
+        <h3>逐筆變更紀錄</h3>
+        <p class="card-sub" id="changeLogSub">缺值補齊、關鍵字重分類等，值被覆蓋的儲存格清單</p>
+        <div class="table-scroll"><table class="data-table" id="changeLogTable"></table></div>
+      </div>
+
+      <div class="card" style="margin-top:14px;">
+        <details class="cat-table">
+          <summary>商品類別對應表（69 碼固定版本，點擊展開）</summary>
+          <div class="table-scroll" style="margin-top:10px;"><table class="data-table" id="categoryTableView"></table></div>
+        </details>
+      </div>
+
+      <div class="card" style="margin-top:14px;">
+        <h3>清洗後資料預覽（乾淨資料）</h3>
+        <p class="card-sub" id="cleanPreviewSub">前 10 列</p>
+        <div class="table-scroll"><table class="data-table" id="cleanPreviewTable"></table></div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn" onclick="goScreen('import')">← 上一步</button>
+        <button class="btn btn-primary" onclick="goScreen('forecast')">下一步：需求預測 →</button>
+      </div>
+    </section>
+
+    <!-- ================= 3. FORECAST ================= -->
+    <section class="screen" id="screen-forecast" data-title="需求預測" data-desc="週／月需求時間序列預估">
+      <div class="page-head">
+        <h1>3｜需求預測</h1>
+        <p>依清洗後歷史出貨資料，以月為單位彙總各商品類別／SKU 的出貨量，採「最後一季 hold out」驗證：用較早期別訓練、對最後一季逐期預測，再與實際值比對，並由系統自動為每個序列選出誤差最低的模型（Naive／季節Naive／MA3／SES／Holt／Croston）。驗證後的需求可作為 ABC 分級、儲位配置與採購備貨的依據。本模組僅依歷史出貨量估算，未納入促銷、季節、缺貨替代等外部因素。</p>
+      </div>
+      <div id="sampleWarnForecast"></div>
+
+      <div class="card" style="margin-bottom:14px;">
+        <h3>預測設定</h3>
+        <div class="tabbar">
+          <button class="tabbtn active" data-tgt="qty" onclick="onForecastTargetChange('qty')">預測出貨量</button>
+          <button class="tabbtn" data-tgt="cnt" onclick="onForecastTargetChange('cnt')">預測揀貨次數</button>
+        </div>
+        <div class="grid grid-2" style="margin-top:14px;">
+          <div class="kv"><span class="k">驗證方式</span><span class="v">最後一季 hold out（最後 3 個完整月；不完整末月自動排除）</span></div>
+          <div class="kv"><span class="k">模型挑選</span><span class="v">系統自動選模（walk-forward，依 MASE）</span></div>
+          <div class="kv"><span class="k">候選模型</span><span class="v">Naive／季節Naive／MA3／SES／Holt／Croston</span></div>
+          <div class="kv"><span class="k">歷史資料可用期數</span><span class="v" id="forecastPeriodCount">—</span></div>
+        </div>
+        <p class="section-note">改為「最後一季 hold out」驗證：以較早期別訓練、對最後一季逐期預測，再與實際值比對；每個序列由系統自動選出誤差最低的模型（不需手動調 α／β）。準確度以 MASE（&lt;1 表示優於 Naive 基準）與誤差%（WAPE）呈現。</p>
+      </div>
+
+      <div class="grid grid-4" style="margin-bottom:14px;" id="forecastStatTiles"></div>
+
+      <div class="card" style="margin-bottom:14px;">
+        <h3>整體需求趨勢與最後一季驗證</h3>
+        <p class="card-sub" id="forecastTrendSub">全資料集加總之週／月出貨量，虛線為預測延伸</p>
+        <div class="subtabbar" style="margin:2px 0 10px;">
+          <button class="subtabbtn active" data-fctm="qty" onclick="setFcTrendMetric('qty')">出貨量</button>
+          <button class="subtabbtn" data-fctm="cnt" onclick="setFcTrendMetric('cnt')">揀貨次數</button>
+        </div>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:4px 0 12px;">
+          <label style="font-size:13px; font-weight:600;">商品ID</label>
+          <input id="fcQueryInput" type="text" list="fcSkuDatalist" placeholder="輸入或下拉選商品ID（空白＝全體）" style="padding:6px 10px; border:1px solid var(--border); border-radius:6px; min-width:240px;" oninput="onFcQueryInput()" onkeydown="if(event.key==='Enter'){doForecastQuery();}">
+          <datalist id="fcSkuDatalist"></datalist>
+          <button class="btn btn-primary" onclick="doForecastQuery()">查詢</button>
+          <button class="btn" onclick="clearForecastQuery()">顯示全體</button>
+        </div>
+        <div id="forecastTrendChart"></div>
+      </div>
+
+      <div class="card" style="margin-bottom:14px;">
+        <h3>商品類別需求預測</h3>
+        <p class="card-sub">最後一季「預測 vs 實際」與誤差%（WAPE）、自動選用模型；「熱度等級」取自 儲位配置頁面之分級門檻</p>
+        <div class="table-scroll" style="max-height:360px;"><table class="data-table" id="forecastCatTable"></table></div>
+      </div>
+
+      <div class="card" style="margin-top:14px;">
+        <h3>SKU 最後一季預測 vs 實際 Top 20</h3>
+        <p class="card-sub" id="forecastSkuSub">取歷史出貨量前 200 名 SKU 為候選池，顯示最後一季預測 vs 實際</p>
+        <div class="table-scroll" style="max-height:400px;"><table class="data-table" id="forecastSkuTable"></table></div>
+      </div>
+
+      <div class="card" style="margin-top:14px;">
+        <h3>商品生命週期分類（新品／滯銷／正常）</h3>
+        <p class="card-sub">依「出貨日期」判斷每個 SKU 的首末出貨月：首次出貨落在最近 N 個月＝新品；最近 N 個月無出貨（以前曾有）＝滯銷；其餘＝正常。純依銷售訊號推論，無商品狀態主檔覆核。</p>
+        <div style="display:flex; align-items:center; gap:12px; margin:10px 0; flex-wrap:wrap;">
+          <label style="font-size:13px;">判斷視窗（最近 N 個月）</label>
+          <select id="lifecycleWindow" onchange="onLifecycleWindowChange()" style="padding:4px 8px; border-radius:6px;">
+            <option value="3">3</option><option value="6" selected>6</option><option value="9">9</option><option value="12">12</option>
+          </select>
+          <button class="btn btn-primary" onclick="downloadLifecycleCSV()" style="margin-left:auto;">⬇ 下載完整清單（CSV）</button>
+        </div>
+        <div class="grid grid-3" id="lifecycleTiles" style="margin-bottom:12px;"></div>
+        <div class="table-scroll" style="max-height:320px;"><table class="data-table" id="lifecycleTable"></table></div>
+        <p class="section-note">供採購（呆滯品停補、新品備貨）與倉管（釋出滯銷儲位、新品給位）參考。門檻可調；為銷售訊號推論，缺貨空窗或商品改編碼可能造成誤判。</p>
+      </div>
+
+
+      <div class="card" style="margin-top:14px;">
+        <div class="assumption-panel">
+          <b>限制與假設：</b>採最後一季 hold out 驗證＋自動選模，準確度以 MASE／誤差%(WAPE) 呈現。限制：月資料期數偏短、年度季節性僅約 2 週期需保守看待；預測為點估計、未附預測區間（採購安全庫存需另加變異與服務水準）；未整合促銷、季節活動、缺貨替代、新品上市等外部因素。
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn" onclick="goScreen('clean')">← 上一步</button>
+        <button class="btn btn-primary" onclick="goScreen('abc')">下一步：儲位配置 →</button>
+      </div>
+    </section>
+
+    <!-- ================= 4. ABC / CO-PICK ================= -->
+    <section class="screen" id="screen-abc" data-title="儲位配置" data-desc="商品熱度分級與共同揀取關係">
+      <div class="page-head">
+        <h1>4｜儲位配置</h1>
+        <p>依清洗後資料計算各商品類別的出貨熱度分級，並分析同一張訂單中商品類別的共同出現關係，作為儲位分區與批次揀貨規則的依據。「儲位配置與商品查詢」分頁提供改善前後倉儲雙圖，並可輸入商品ID 查詢其改善前後所屬區塊（幾何比照倉儲_區塊內ABC分群圖）。</p>
+      </div>
+
+      <div class="tabbar">
+        <button class="tabbtn active" data-tab="abc" onclick="switchTab('abc')">ABC 熱度分級</button>
+        <button class="tabbtn" data-tab="copick" onclick="switchTab('copick')">共同揀取關係</button>
+        <button class="tabbtn" data-tab="storage" onclick="switchTab('storage')">儲位配置與商品查詢</button>
+      </div>
+
+      <div id="tab-abc">
+        <div class="card" style="margin-bottom:14px;">
+          <h3>分級門檻</h3>
+          <div class="grid grid-2">
+            <div class="slider-row">
+              <div class="slider-label"><span>A 級累積佔比門檻</span><span class="val" id="abcAVal">80%</span></div>
+              <input type="range" id="abcASlider" min="50" max="90" value="80" oninput="onAbcSliderChange()">
+            </div>
+            <div class="slider-row">
+              <div class="slider-label"><span>B 級累積佔比門檻</span><span class="val" id="abcBVal">95%</span></div>
+              <input type="range" id="abcBSlider" min="91" max="99" value="95" oninput="onAbcSliderChange()">
+            </div>
+          </div>
+        </div>
+        <div class="grid grid-2" style="align-items:start;">
+          <div class="card">
+            <h3>Pareto（貨架區·依預測揀貨次數）</h3>
+            <p class="card-sub">X＝SKU 依預測揀貨次數排名百分位；Y＝累計佔比</p>
+            <div id="skuParetoShelf"></div>
+          </div>
+          <div class="card">
+            <h3>Pareto（棧板區·依預測出貨量）</h3>
+            <p class="card-sub">X＝SKU 依預測出貨量排名百分位；Y＝累計佔比</p>
+            <div id="skuParetoPallet"></div>
+          </div>
+        </div>
+        <div class="grid grid-2" style="align-items:start; margin-top:14px;">
+          <div class="card">
+            <h3>SKU ABC 分級 Top 15（貨架區·依預測揀貨次數）</h3>
+            <p class="card-sub" id="abcShelfSub">—</p>
+            <div class="table-scroll" style="max-height:340px;"><table class="data-table" id="abcShelfTable"></table></div>
+          </div>
+          <div class="card">
+            <h3>SKU ABC 分級 Top 15（棧板區·依預測出貨量）</h3>
+            <p class="card-sub" id="abcPalletSub">—</p>
+            <div class="table-scroll" style="max-height:340px;"><table class="data-table" id="abcPalletTable"></table></div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:14px;">
+          <h3>各類別預測需求排序</h3>
+          <p class="card-sub">區域依清洗結果分貨架／棧板區；貨架區依「預測揀貨次數」、棧板區依「預測出貨量」排序，累計佔比即為 ABC 區域配置的依據。分級結果仍照常計算並套用於倉庫儲位配置，本表僅不另標示級別。預測值＝最後一季完整月自動選模之預測總量。</p>
+          <div class="grid grid-2" style="align-items:start;">
+            <div><h3 style="font-size:14px;">貨架區（依預測揀貨次數）</h3><div class="table-scroll" style="max-height:320px;"><table class="data-table" id="predAbcShelfTable"></table></div></div>
+            <div><h3 style="font-size:14px;">棧板區（依預測出貨量）</h3><div class="table-scroll" style="max-height:320px;"><table class="data-table" id="predAbcPalletTable"></table></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-copick" style="display:none;">
+        <div class="card" style="margin-bottom:14px;">
+          <h3>商品共同揀取 Top 組合（供 A、B 級商品相鄰參考）</h3>
+          <p class="card-sub" id="adjSub">篩選同區域（同為貨架或同為棧板）、Lift 高且兩商品皆屬高頻的 SKU 組合，建議儲位相鄰以縮短同趟揀取往返</p>
+          <div class="table-scroll" style="max-height:340px;"><table class="data-table" id="adjTable"></table></div>
+        </div>
+        <div class="card" style="margin-bottom:14px;">
+          <h3>類別共同揀取 Top 組合（供 C 級類別群組相鄰參考）</h3>
+          <p class="card-sub" id="catPairSub">A／B 級為個別 SKU 排位、用不到本表；此表供 C 級（依類別群聚擺放）安排常一起被揀的類別群組相鄰之參考</p>
+          <div class="table-scroll" style="max-height:360px;"><table class="data-table" id="catPairTable"></table></div>
+        </div>
+        <div class="card">
+          <div class="assumption-panel">
+            <b>計算方式：</b>以「系統出貨單號」為訂單鍵值，support = 同時出現次數 ÷ 總出貨單數；lift = 同時出現機率 ÷（各自獨立出現機率之積），lift ＞1 代表正相關，數值越大關聯性越強。為避免小樣本雜訊，僅列出共同出貨次數達門檻以上的組合（門檻依資料量自動調整）。
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-storage" style="display:none;">
+        <div id="sampleWarnQuery"></div>
+        <div class="card" style="margin-bottom:14px;">
+          <h3>商品配置查詢（改善前 vs 改善後）</h3>
+          <p class="card-sub">輸入商品ID，依「材積分區＋類別配置（改善前）」與「ABC 熱度配置＋共同揀取（改善後）」計算其所屬區塊，並在下方兩張倉儲圖上以藍框閃爍標示。幾何與代號比照倉儲_區塊內ABC分群圖。</p>
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:8px;">
+            <label style="font-size:13px; font-weight:600;">商品ID</label>
+            <input id="queryInput" type="text" list="skuDatalist" placeholder="輸入或下拉選商品ID" style="padding:6px 10px; border:1px solid var(--border); border-radius:6px; min-width:260px;" oninput="onQueryInput()" onkeydown="if(event.key==='Enter'){doProductQuery();}">
+            <button class="btn btn-primary" onclick="doProductQuery()">查詢</button><datalist id="skuDatalist"></datalist>
+          </div>
+          <div id="queryResult" style="margin-top:12px;"></div>
+        </div>
+        <div class="grid grid-2" style="align-items:start;">
+          <div class="card"><h3>改善前配置（現行類別配置）</h3><p class="card-sub">滑過區塊顯示所屬類別；閃爍藍框＝查詢商品所在區塊</p><div class="wh-map" id="whBeforeMap"></div><div class="legend-row"><div class="legend-item"><span class="legend-swatch" style="background:#e8930c;"></span>貨架區</div><div class="legend-item"><span class="legend-swatch" style="background:#3ba33b;"></span>棧板區</div><div class="legend-item"><span style="color:var(--critical);font-size:15px;margin-right:4px;vertical-align:middle;">★</span>出貨點</div><div class="legend-item"><span style="display:inline-block;width:16px;height:3px;background:var(--critical);vertical-align:middle;margin-right:5px;"></span>紅橫線＝倉庫出入口</div><div class="legend-item"><span style="display:inline-block;width:3px;height:14px;background:var(--critical);vertical-align:middle;margin-right:6px;"></span>紅直線＝貨車出入口</div></div></div>
+          <div class="card"><h3>改善後配置（ABC 熱度配置＋共同揀取）</h3><p class="card-sub"><span style="color:#e8564a;font-weight:600;">紅＝A 近</span>／<span style="color:#f0b13c;font-weight:600;">橙＝B 中</span>／<span style="color:#7cc47c;font-weight:600;">綠＝C 遠</span>；閃爍＝查詢商品所屬分區</p><div class="wh-map" id="whAfterMap"></div><div class="legend-row"><div class="legend-item"><span class="legend-swatch" style="background:#e8564a;"></span>A（近）</div><div class="legend-item"><span class="legend-swatch" style="background:#f0b13c;"></span>B（中）</div><div class="legend-item"><span class="legend-swatch" style="background:#7cc47c;"></span>C（遠）</div><div class="legend-item"><span style="color:var(--critical);font-size:15px;margin-right:4px;vertical-align:middle;">★</span>出貨點</div><div class="legend-item"><span style="display:inline-block;width:16px;height:3px;background:var(--critical);vertical-align:middle;margin-right:5px;"></span>紅橫線＝倉庫出入口</div><div class="legend-item"><span style="display:inline-block;width:3px;height:14px;background:var(--critical);vertical-align:middle;margin-right:6px;"></span>紅直線＝貨車出入口</div></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 5. BATCH ================= -->
+    <section class="screen" id="screen-batch" data-title="揀貨策略" data-desc="逐單揀貨 vs 批次併單模擬">
+      <div class="page-head">
+        <h1>5｜揀貨策略</h1>
+        <p>批次以「當日＋縣市＋行政區」為分群硬限制（每批＝一條配送路線，批次不跨區），比較逐單揀貨與播種式批次（群內同 SKU 聚合、一次揀完再分貨）的揀貨回合數與倉內移動距離。播種式批次的容量＝每趟最多揀取的不同 SKU 數。行政區訂單數 ≥N 才就地相似度併單，未達門檻的稀疏行政區併入同日同縣市。</p>
+      </div>
+      <div id="sampleWarnBatch"></div>
+
+      <div class="grid grid-2" style="align-items:start;">
+        <div class="card">
+          <h3>情境參數</h3>
+          <div class="slider-row">
+            <div class="slider-label"><span>播種批次容量（每趟最多揀取 SKU 數）</span><span class="val" id="batchCapVal">20 SKU</span></div>
+            <input type="range" id="batchCapSlider" min="5" max="40" value="20" step="1" oninput="onBatchSliderChange()">
+          </div>
+          <div class="slider-row">
+            <div class="slider-label"><span>稀疏門檻 N（行政區訂單 ≥N 就地併單，否則併入同縣市）</span><span class="val" id="batchNVal">5</span></div>
+            <input type="range" id="batchNSlider" min="1" max="20" value="5" step="1" oninput="onBatchNChange()">
+          </div>
+          <p class="footnote">容量以 10／20／30 SKU 比較，20 為基準。若每群不重複 SKU 數中位數 ≤ 容量，代表整群多能一趟揀完、容量影響有限。</p>
+          <div class="kv"><span class="k">訂單總數</span><span class="v" id="batchOrderCount">—</span></div>
+          <div class="kv"><span class="k">訂單明細總行數</span><span class="v" id="batchLineCount">—</span></div>
+          <div class="kv"><span class="k">平均每張訂單行數</span><span class="v" id="batchAvgLines">—</span></div>
+          <div class="kv"><span class="k">地理分群數（日×縣市×行政區）</span><span class="v" id="batchGroupCount">—</span></div>
+          <div class="kv"><span class="k">每群不重複 SKU 數中位數</span><span class="v" id="batchSkuMedian">—</span></div>
+          <div class="kv"><span class="k">容量卡到的群比例</span><span class="v" id="batchBind">—</span></div>
+          <div class="kv"><span class="k">評估期間（最近一季）</span><span class="v" id="batchWindow">—</span></div>
+        </div>
+        <div class="card">
+          <h3>揀貨回合數比較</h3>
+          <p class="card-sub">逐單 vs 播種式批次；回合數越少代表往返倉儲越少</p>
+          <div id="batchChart"></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:14px;">
+        <h3>逐單 vs 播種式批次比較（容量 <span id="batchCapEcho">20</span> SKU/趟）</h3>
+        <p class="card-sub">播種式批次＝群內同 SKU 聚合、一次揀完再分貨（播種）。移動距離以改善後配置的區塊 distance_m 來回估算；播種另有分貨工時未計入。</p>
+        <div class="table-scroll"><table class="data-table" id="batchCompareTable"></table></div>
+      </div>
+
+      <div class="grid grid-2" style="margin-top:14px; align-items:start;">
+        <div class="card">
+          <h3>批次容量情境對照表</h3>
+          <div class="table-scroll"><table class="data-table" id="batchScenarioTable"></table></div>
+        </div>
+        <div class="card">
+          <h3>配送地理分布（Top 15 行政區）</h3>
+          <p class="card-sub">依訂單數；顯示批次分群的地理組成</p>
+          <div class="table-scroll" style="max-height:360px;"><table class="data-table" id="batchGeoTable"></table></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:14px;">
+        <h3>指定出貨日期查看併單結果</h3>
+        <p class="card-sub">選擇或輸入某一出貨日期，顯示當日各波（就地併單／稀疏併縣市）的併單結果，並可選一個波查看「先完成最多訂單」排序的 SKU 揀取順序。</p>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:6px 0 12px;">
+          <label style="font-size:13px; font-weight:600;">出貨日期</label>
+          <input id="batchDayInput" type="text" list="batchDayList" placeholder="YYYY-MM-DD（可下拉選）" style="padding:6px 10px; border:1px solid var(--border); border-radius:6px; min-width:200px;" onkeydown="if(event.key==='Enter'){doBatchDayQuery();}">
+          <datalist id="batchDayList"></datalist>
+          <button class="btn btn-primary" onclick="doBatchDayQuery()">查看</button>
+          <button class="btn" onclick="clearBatchDay()">清除</button>
+        </div>
+        <div id="batchDaySummary" class="grid grid-4" style="margin-bottom:12px;"></div>
+        <div id="batchDayResult"></div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn" onclick="goScreen('abc')">← 上一步</button>
+        <button class="btn btn-primary" onclick="goScreen('kpi')">下一步：KPI 儀表板 →</button>
+      </div>
+    </section>
+
+    <!-- ================= 6. STORAGE / AGV ================= -->
+    <!-- ================= 7. KPI ================= -->
+    <section class="screen" id="screen-kpi" data-title="KPI 儀表板" data-desc="改善前後成果總覽">
+      <div class="page-head">
+        <h1>6｜KPI 儀表板</h1>
+        <p>彙整改善前後配置與批次併單結果，對照專案核准之三項關鍵績效指標，並提供保守／基準／樂觀敏感度分析。</p>
+      </div>
+      <div id="sampleWarnKpi"></div>
+
+      <div class="card" style="margin-bottom:14px;">
+        <h3>假設參數（人工揀貨）</h3>
+        <div class="grid grid-2" style="margin-top:8px;">
+          <div class="slider-row"><div class="slider-label"><span>步行速度（m/s）</span><span class="val" id="kpiSpeedVal">1.0</span></div><input type="range" id="kpiSpeed" min="0.6" max="1.6" step="0.1" value="1.0" oninput="onKpiParamChange()"></div>
+          <div class="slider-row"><div class="slider-label"><span>每品項取放時間（秒）</span><span class="val" id="kpiHandleVal">12</span></div><input type="range" id="kpiHandle" min="5" max="30" step="1" value="12" oninput="onKpiParamChange()"></div>
+        </div>
+        <p class="section-note">揀貨回合的批次容量請於「揀貨策略」頁調整；本頁參數改動後即時重算移動距離與工時。</p>
+      </div>
+
+      <div class="grid grid-3" style="margin-bottom:14px;" id="kpiHeroTiles"></div>
+
+      <div class="grid grid-2" style="align-items:start;">
+        <div class="card">
+          <h3>改善前後比較</h3>
+          <p class="card-sub">改善前（現行類別配置）vs 改善後（ABC 配置）之人工總移動距離</p>
+          <div id="kpiCompareChart"></div>
+        </div>
+        <div class="card">
+          <h3>情境敏感度分析</h3>
+          <p class="card-sub">依步行速度、取放時間等假設之不確定性，估算保守至樂觀範圍</p>
+          <div class="table-scroll"><table class="data-table scenario-table" id="scenarioTable"></table></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:14px;">
+        <h3>資料來源、模型假設與計算方式</h3>
+        <div class="assumption-panel" id="assumptionFinal">
+          <b>資料來源：</b>門市出貨訂單明細檔、商品類別對應表、倉儲幾何（倉儲_資料.json，比照倉儲_區塊內ABC分群圖）。<br>
+          <b>模型假設：</b>僅分析人工揀貨。改善前＝材積分區＋類別配置＋逐單揀貨；改善後＝ABC 熱度配置＋共同揀取＋批次併單（播種）；步行速度、取放時間為可調假設值。<br>
+          <b>計算方式：</b>以實際訂單計算——每張訂單造訪到的各區塊，用其 distance_m（沿走道曼哈頓到出貨原點）來回加總為移動距離；移動距離：改善前＝改善前儲位下「逐單」每張訂單造訪區塊來回加總；改善後＝改善後儲位下「播種批次」每波各回合造訪區塊來回加總。改善率＝（改善前－改善後）／改善前；總揀貨工時＝移動距離／步行速度＋揀取次數×取放時間（逐單取放次數＝總明細行數，播種＝各波不重複 SKU 合計；播種另有分貨工時未計入）。<br>
+          <b>限制：</b>座標為示意重繪、無真實 SKU－儲位主檔；抽樣訂單估算，僅供方案比較與現場驗證參考，不代表實際營運績效。
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn" onclick="goScreen('batch')">← 上一步</button>
+        <button class="btn btn-primary" onclick="runFullPipeline()">🔁 重新執行全流程模擬</button>
+      </div>
+    </section>
+  </main>
 </div>
 
 <script src="warehouse_geometry.js"></script>
 <script>
+
 /* =========================================================================
-   儲位配置與揀貨策略優化系統 — 示範前端（呼叫後端 API，不在瀏覽器內做任何分析運算）
-   對照：原本 809KB 單檔 HTML 把清洗／ABC／共同揀取／預測／批次／儲位／KPI 全部算在
-   這支 <script> 裡；這裡改成只負責「打 API、畫圖表」，運算全部在後端完成。
+   儲位配置與揀貨策略優化系統 — 前後端分離版前端
+   畫面／CSS／互動元件（圖示、按鈕、篩選器、分頁）逐一比照原始單檔 UI 原型
+   （儲位配置與揀貨策略優化系統.html）搬過來；差別只在「資料從哪裡來」：
+   原型的每一個畫面都在瀏覽器內用 JS 對 RAW 資料現算（清洗／預測／ABC／
+   共同揀取／批次／KPI 全部是前端函式）；這一版把全部運算邏輯都拿掉，
+   一律呼叫後端 /api/* 端點拿現成結果，前端只負責「打 API、把回傳資料塞進
+   跟原型一模一樣的 DOM 結構、畫成一樣的圖表」，不在瀏覽器內做任何統計或
+   演算法運算。
    ========================================================================= */
 
-// 後端網址預設值：用 file:// 直接開這個檔（本機開發）時連 127.0.0.1:8000；
+// 後端網址：用 file:// 直接開這個檔（本機開發）時預設連 127.0.0.1:8000；
 // 部署後由後端一起把這個頁面送出來（同源）時，直接用當下網域，免設定、也沒有 CORS 問題。
 let API_BASE = (location.protocol === 'file:') ? 'http://127.0.0.1:8000' : location.origin;
 
 // 登入 token：登入成功後由後端發給，存在 localStorage。每次呼叫 API 都帶
 // Authorization: Bearer <token>，後端據此判斷是哪位使用者、只回傳／儲存這個人的資料。
-// 資料歸屬綁定「帳號」而非前端字串，所以就算知道別人的什麼 id 也存取不到別人的資料。
 let AUTH_TOKEN = localStorage.getItem('warehouse_token') || null;
 function setToken(t){ AUTH_TOKEN = t; if(t) localStorage.setItem('warehouse_token', t); else localStorage.removeItem('warehouse_token'); }
 
-const SCREENS = [
-  {id:'overview', title:'總覽', desc:'架構說明'},
-  {id:'import',   title:'資料匯入', desc:'上傳／載入範例'},
-  {id:'clean',    title:'資料清洗', desc:'呼叫 /api/clean'},
-  {id:'forecast', title:'需求預測', desc:'呼叫 /api/forecast'},
-  {id:'abc',      title:'儲位配置', desc:'ABC＋共同揀取＋分區'},
-  {id:'batch',    title:'揀貨策略', desc:'呼叫 /api/batch'},
-  {id:'kpi',      title:'KPI 儀表板', desc:'呼叫 /api/kpi'},
-];
-let currentScreen = 'overview';
-let cleaned = false;
+let cleaned = false;          // 是否已成功呼叫過 /api/clean/run（或曾清洗過，重新整理後由後端狀態補回）
+let usingSample = false;      // 目前資料是否為「內建個案範例資料」（載入樣本 vs 真正上傳）
 
-function buildNav(){
-  document.getElementById('nav').innerHTML = SCREENS.map(s =>
-    `<div class="navitem ${s.id===currentScreen?'active':''}" onclick="goScreen('${s.id}')">
-       ${s.title}<span class="desc">${s.desc}</span>
-     </div>`).join('');
+// ---- 通用小工具（純格式化／顯示，不含任何統計或演算法邏輯） ----
+function escHtml(s){ return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function escTip(s){ return String(s??'').replace(/'/g,"&#39;").replace(/"/g,'&quot;'); }
+function pct(v){ return (v==null?'—':v.toFixed(1)+'%'); }
+function num(v){ return (v==null?'—':Math.round(v).toLocaleString()); }
+function truncate(s, n){ s=String(s??''); return s.length>n ? s.slice(0,n-1)+'…' : s; }
+function emptyState(msg){ return `<div class="empty">${escHtml(msg)}</div>`; }
+function sampleBanner(){
+  if(!usingSample) return '';
+  return `<div class="card" style="margin-bottom:14px; border-color:var(--warning); background:color-mix(in srgb, var(--warning) 12%, var(--surface-1));">
+    <div style="font-size:12px; color:var(--text-primary); display:flex; gap:8px; align-items:flex-start;">
+      <span>⚠️</span><span>目前使用<b>內建個案範例資料</b>，僅供操作流程與版面展示，樣本數遠小於實際資料集。
+      正式分析請於「資料匯入」頁面上傳完整資料集。</span>
+    </div>
+  </div>`;
 }
-function goScreen(id){ currentScreen=id; buildNav(); render(); }
-
-function setApiBase(){
-  API_BASE = document.getElementById('apiBaseInput').value.trim().replace(/\/$/,'');
-  checkHealth();
-}
-
-async function checkHealth(){
-  const dot = document.getElementById('apiDot'), txt = document.getElementById('apiStatusText');
-  try{
-    const r = await fetch(API_BASE + '/api/health');
-    if(!r.ok) throw new Error('bad status');
-    dot.className='dot ok'; txt.textContent='已連線';
-  }catch(e){
-    dot.className='dot bad'; txt.textContent='無法連線到後端（請先用 uvicorn 啟動 backend，見總覽頁說明）';
-  }
-}
+// ABC 分級（A／B／C）→ chip 顏色語意，比照原型（A=ok 綠、B=warn 橘、C=bad 紅）。
+function clsChip(cls){ return cls==='A' ? 'ok' : cls==='B' ? 'warn' : 'bad'; }
+function clsChipHtml(cls){ return `<span class="chip ${clsChip(cls)}">${escHtml(cls)}</span>`; }
 
 // ---- API 輔助函式：所有分析結果都來自這裡，前端本身不做任何運算 ----
-// 每次請求都帶 Authorization: Bearer <token>，後端據此把資料存到／讀自「這位登入者」專屬的空間。
 function authHeaders(){ return AUTH_TOKEN ? {'Authorization': 'Bearer ' + AUTH_TOKEN} : {}; }
-// token 失效（401）時：清掉本機 token、跳回登入畫面。
 function handle401(){ setToken(null); showAuthGate('登入已失效，請重新登入'); }
 async function apiGet(path, params){
   const url = new URL(API_BASE + path);
@@ -186,384 +916,124 @@ async function apiGet(path, params){
 }
 async function apiPost(path, opts){
   opts = opts || {};
-  // 注意：上傳檔案用的是 FormData，這裡「只」加 Authorization、不設定 Content-Type，
-  // 讓瀏覽器自己補上帶 boundary 的 multipart 標頭，否則後端會解析不到檔案。
   const headers = Object.assign({}, authHeaders(), opts.headers || {});
   const r = await fetch(API_BASE + path, {method:'POST', ...opts, headers});
   if(r.status === 401){ handle401(); throw new Error('未登入'); }
   if(!r.ok){ const body = await r.json().catch(()=>({detail:r.statusText})); throw new Error(body.detail || ('HTTP '+r.status)); }
   return r.json();
 }
-// 帶 JSON body 的 POST（跟上面 apiPost 共用 401 處理／錯誤處理，只是 body 換成 JSON 字串）。
-async function apiPostJson(path, obj){
-  return apiPost(path, {body: JSON.stringify(obj), headers: {'Content-Type': 'application/json'}});
-}
-function escHtml(s){ return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-function pct(v){ return (v==null?'—':v.toFixed(1)+'%'); }
-function num(v){ return (v==null?'—':Math.round(v).toLocaleString()); }
+async function apiPostJson(path, obj){ return apiPost(path, {body: JSON.stringify(obj), headers: {'Content-Type': 'application/json'}}); }
 
-function render(){
-  buildNav();
-  const el = document.getElementById('screen');
-  if(currentScreen==='overview') return renderOverview(el);
-  if(currentScreen==='import') return renderImport(el);
-  if(currentScreen==='clean') return renderClean(el);
-  if(currentScreen==='forecast') return renderForecast(el);
-  if(currentScreen==='abc') return renderAbc(el);
-  if(currentScreen==='batch') return renderBatch(el);
-  if(currentScreen==='kpi') return renderKpi(el);
+function toggleApiSettings(){
+  const p = document.getElementById('apiSettingsPanel');
+  p.style.display = p.style.display==='none' ? 'block' : 'none';
+}
+function setApiBase(){
+  API_BASE = document.getElementById('apiBaseInput').value.trim().replace(/\/$/,'');
+  checkHealth();
+}
+async function checkHealth(){
+  const dot = document.getElementById('apiDot'), txt = document.getElementById('apiStatusText');
+  try{
+    const r = await fetch(API_BASE + '/api/health');
+    if(!r.ok) throw new Error('bad status');
+    dot.className='conn-dot ok'; txt.textContent='已連線';
+  }catch(e){
+    dot.className='conn-dot bad'; txt.textContent='無法連線到後端（請先用 uvicorn 啟動 backend）';
+  }
 }
 
-// ================= 總覽 =================
-// 系統作業流程圖（自原始單檔的 FLOW_NODES／renderFlowDiagram 移植，改回傳 HTML 字串）。
+/* ---------------- 導覽：畫面清單、側欄、切換（比照原型 buildSidebar／goScreen） ---------------- */
+const SCREENS = [
+  {id:'overview', title:'總覽',        desc:'目標與流程'},
+  {id:'import',   title:'資料匯入',    desc:'匯入 xlsx／csv'},
+  {id:'clean',    title:'資料清洗',    desc:'標準化與品質檢查'},
+  {id:'forecast', title:'需求預測',    desc:'未來期別需求預估'},
+  {id:'abc',      title:'儲位配置',    desc:'熱度分級與關聯分析'},
+  {id:'batch',    title:'揀貨策略',    desc:'批次併單模擬'},
+  {id:'kpi',      title:'KPI 儀表板',  desc:'改善成果總覽'},
+];
+let currentScreen = 'overview';
+let maxVisitedIdx = 0;
+
+function buildSidebar(){
+  const nav = document.getElementById('sidebar');
+  nav.innerHTML = SCREENS.map((s,i)=>`
+    <div style="position:relative;">
+      <div class="nav-step" data-screen="${s.id}" onclick="goScreen('${s.id}')">
+        <div class="step-dot">${i===0?'•':i}</div>
+        <div>
+          <div class="step-title">${s.title}</div>
+          <div class="step-desc">${s.desc}</div>
+        </div>
+      </div>
+      ${i < SCREENS.length-1 ? '<div class="nav-rail"></div>' : ''}
+    </div>
+  `).join('');
+  refreshSidebar();
+}
+function refreshSidebar(){
+  SCREENS.forEach((s,i)=>{
+    const el = document.querySelector(`.nav-step[data-screen="${s.id}"]`);
+    if(!el) return;
+    el.classList.toggle('active', s.id === currentScreen);
+    el.classList.toggle('done', i < maxVisitedIdx);
+  });
+}
+function goScreen(id){
+  currentScreen = id;
+  const idx = SCREENS.findIndex(s=>s.id===id);
+  if(idx > maxVisitedIdx) maxVisitedIdx = idx;
+  document.querySelectorAll('section.screen').forEach(sec=>{ sec.classList.toggle('active', sec.id === 'screen-'+id); });
+  refreshSidebar();
+  window.scrollTo({top:0, behavior:'instant'});
+  checkHealth();
+  if(id==='import') refreshImportStatus();
+  if(id==='clean') renderCleanScreen();
+  if(id==='forecast') renderForecastScreen();
+  if(id==='abc') renderAbcScreen();
+  if(id==='batch') renderBatchScreen();
+  if(id==='kpi') renderKpiScreen();
+}
+
+document.getElementById('themeToggle').addEventListener('click', ()=>{
+  const root = document.documentElement;
+  const isDark = root.getAttribute('data-theme') === 'dark';
+  root.setAttribute('data-theme', isDark ? 'light' : 'dark');
+  localStorage.setItem('warehouse_theme', isDark ? 'light' : 'dark');
+  document.getElementById('themeToggle').textContent = isDark ? '🌙' : '☀️';
+  // 圖表大多用 CSS 變數上色、深色模式切換會自動套用；只有極少數用 JS 內嵌色碼（例如儲位熱度圖的
+  // A/B/C 固定色），這幾個不隨主題變化（原型亦同），故不需要重繪。
+});
+(function initTheme(){
+  const saved = localStorage.getItem('warehouse_theme');
+  if(saved === 'dark'){ document.documentElement.setAttribute('data-theme','dark'); }
+})();
+
+/* ---------------- 總覽：系統作業流程圖（自原型 FLOW_NODES／renderFlowDiagram 移植） ---------------- */
 const FLOW_NODES = [
   {title:'CSV／XLSX 匯入', desc:'欄位自動偵測與型別檢查'},
   {title:'資料清洗', desc:'標準化、去重、去噪'},
   {title:'需求預測', desc:'週／月需求時間序列預估'},
   {title:'儲位配置', desc:'熱度分級與關聯分析'},
   {title:'批次併單模擬', desc:'揀貨回合數比較'},
-  {title:'儲位／情境模擬', desc:'人工／AGV 參數比較'},
+  {title:'儲位／情境模擬', desc:'KPI 參數比較'},
   {title:'KPI 視覺化', desc:'改善前後成果呈現'},
 ];
-function flowDiagram(){
-  return `<div class="flow">${FLOW_NODES.map((n,i)=>`
+function renderFlowDiagram(){
+  const el = document.getElementById('flowDiagram');
+  if(!el) return;
+  el.innerHTML = FLOW_NODES.map((n,i)=>`
     <div class="flow-node"><div class="fn-num">${i+1}</div><div class="fn-title">${escHtml(n.title)}</div><div class="fn-desc">${escHtml(n.desc)}</div></div>
-    ${i<FLOW_NODES.length-1 ? '<div class="flow-arrow">→</div>' : ''}`).join('')}</div>`;
+    ${i<FLOW_NODES.length-1 ? '<div class="flow-arrow">→</div>' : ''}`).join('');
 }
 
-function renderOverview(el){
-  el.innerHTML = `
-    <h2>總覽</h2>
-    <p class="subtitle">將門市出貨訂單資料匯入後，依序完成資料清洗、需求預測、ABC 熱度分級與共同揀取分析、
-    批次併單模擬、儲位與人工／AGV 情境模擬，最終以 KPI 儀表板呈現改善前後成果。整體邏輯呼應
-    「需求預測 → 儲位配置 → 最佳揀貨」的倉儲作業優化思路。所有運算都在後端 Python 服務執行，前端只呼叫 API、畫圖表。</p>
-    <div class="card"><h3>系統作業流程</h3><div id="flowDiagram">${flowDiagram()}</div></div>
-    <div class="grid grid-2">
-      <div class="card"><h3>個案資料概況</h3>
-        <p class="card-sub">個案為連鎖門市的零售物流出貨訂單。原始「訂單資料」工作表含 18 個欄位（系統出貨單號、
-        門市代碼、商品ID／編號／名稱、商品類別、訂購數量、單位、商品長寬高重量、配送地址、預計揀貨/到貨日期…），
-        真實資料量達百萬列等級。上傳後由後端負責解析與清洗，前端只顯示結果。</p></div>
-      <div class="card"><h3>專案範疇與限制</h3>
-        <p class="card-sub">本系統聚焦「儲位配置優化」與「批次併單揀貨」兩大主題，KPI 僅分析人工揀貨情境
-        （AGV／AMR 為敏感度比較）。倉儲平面圖為示意重繪、非精確 CAD；材積與距離為依走道動線之估算值。
-        分析結果供決策參考，實際導入仍需現場複核。</p></div>
-    </div>
-    <div class="card">
-      <h3>如何啟動</h3>
-      <p class="card-sub">先啟動後端，再打開這個頁面（或直接用瀏覽器開啟這個 index.html 檔案即可，不需要另外的前端伺服器）。</p>
-      <pre style="background:var(--page-plane); padding:12px; border-radius:8px; font-size:12.5px; overflow:auto;">cd backend
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000</pre>
-      <p class="card-sub">啟動後可到 <code>http://127.0.0.1:8000/docs</code> 看互動式 API 文件（Swagger UI），
-      每一支 API 都可以直接在網頁上試打。上方「後端網址」欄位可依實際部署位置調整。</p>
-    </div>
-    <div class="card">
-      <h3>使用流程</h3>
-      <p class="card-sub">依左側選單順序操作：① 資料匯入（上傳檔案或載入內建範例）→ ② 資料清洗（呼叫一次即可，
-      結果會快取在後端 session）→ ③～⑦ 各分析頁面即可即時查詢，調整參數會重新呼叫對應 API。</p>
-    </div>`;
-  checkHealth();
-}
+/* ---------------- 圖表繪製工具（純畫圖，不含統計運算；資料皆由後端算好傳入） ---------------- */
+function showTip(evt, html){ const t=document.getElementById('globalTooltip'); t.innerHTML=html; t.style.left=(evt.pageX+12)+'px'; t.style.top=(evt.pageY+12)+'px'; t.classList.add('show'); }
+function hideTip(){ document.getElementById('globalTooltip').classList.remove('show'); }
 
-// ================= 資料匯入 =================
-function renderImport(el){
-  el.innerHTML = `
-    <h2>資料匯入</h2>
-    <p class="subtitle">對應後端 <code>POST /api/ingest/upload</code> 與 <code>POST /api/ingest/sample</code>。</p>
-    <div class="card">
-      <div class="row">
-        <div>
-          <label>上傳訂單資料（.xlsx／.csv，需含18欄訂單資料工作表「訂單資料」）</label>
-          <input type="file" id="fileInput" accept=".xlsx,.xlsm,.csv">
-        </div>
-        <div style="align-self:flex-end;">
-          <button onclick="doUpload()">上傳並匯入</button>
-          <button class="secondary" onclick="doLoadSample()">改用內建範例資料</button>
-        </div>
-      </div>
-      <div id="importMsg"></div>
-    </div>
-    <div class="card"><h3>匯入結果預覽</h3><div id="importPreview" class="table-scroll"><div class="empty">尚未匯入資料</div></div></div>`;
-  refreshImportStatus();
-}
-async function refreshImportStatus(){
-  try{
-    const s = await apiGet('/api/ingest/status');
-    if(s.status === 'ready') showImportPreview(s);
-    else if(s.status === 'processing') pollImportStatus();
-  }catch(e){}
-}
-// 部署在 Cloud Run 時，單一請求超過這個大小會被平台擋下（回 413），跟後端設定無關、
-// 沒辦法調高，所以超過這個門檻（留一點餘裕給 32MB 上限）改走「直傳 Cloud Storage」路線
-// （見下面 doUpload 內的判斷、後端 /api/ingest/upload_url／/api/ingest/upload_from_gcs）。
-const DIRECT_UPLOAD_THRESHOLD_BYTES = 28 * 1024 * 1024; // 28MB
-
-async function doUpload(){
-  const f = document.getElementById('fileInput').files[0];
-  const msg = document.getElementById('importMsg');
-  if(!f){ msg.innerHTML = `<div class="msg error">請先選擇檔案</div>`; return; }
-  try{
-    if(f.size > DIRECT_UPLOAD_THRESHOLD_BYTES){
-      await doUploadDirect(f, msg);
-    } else {
-      msg.innerHTML = `<div class="msg info">上傳中…</div>`;
-      const fd = new FormData(); fd.append('file', f);
-      // 這支 API 只負責「接收檔案」，會立刻回應；實際解析在後端背景執行緒跑，
-      // 檔案很大（例如百萬列等級）時可能要好幾分鐘，所以改成下面輪詢 /api/ingest/status，
-      // 不要一直卡等這支 API 本身回應。
-      await apiPost('/api/ingest/upload', {body: fd});
-    }
-    cleaned = false;
-    pollImportStatus(0);
-  }catch(e){ msg.innerHTML = `<div class="msg error">匯入失敗：${escHtml(e.message)}</div>`; }
-}
-// 大檔案直傳流程：① 跟後端要一個 Cloud Storage 直傳網址 → ② 瀏覽器直接 PUT 給那個網址
-// （不經過後端，繞開 Cloud Run 的請求大小上限）→ ③ 通知後端去讀、開始背景解析。
-// 後端沒設定 WAREHOUSE_UPLOAD_BUCKET（例如本機開發）時 ① 會回 501，這裡攔截、提示改用小檔案。
-async function doUploadDirect(f, msg){
-  const sizeMb = (f.size/1024/1024).toFixed(1);
-  msg.innerHTML = `<div class="msg info">檔案較大（${sizeMb}MB），改用直傳雲端硬碟方式上傳中，請稍候…</div>`;
-  let urlInfo;
-  try{
-    urlInfo = await apiPostJson('/api/ingest/upload_url', {filename: f.name});
-  }catch(e){
-    throw new Error(`無法取得直傳網址：${e.message}（若在本機開發、尚未設定 WAREHOUSE_UPLOAD_BUCKET，`+
-      `${sizeMb}MB 的檔案在本機是可以用一般上傳的，只有部署在 Cloud Run 上才有 32MB 限制）`);
-  }
-  const putRes = await fetch(urlInfo.upload_url, {
-    method: 'PUT',
-    headers: {'Content-Type': urlInfo.content_type},
-    body: f,
-  });
-  if(!putRes.ok) throw new Error(`直傳雲端硬碟失敗（HTTP ${putRes.status}），請重新整理頁面再試一次`);
-  msg.innerHTML = `<div class="msg info">已上傳到雲端暫存，通知後端開始解析…</div>`;
-  await apiPostJson('/api/ingest/upload_from_gcs', {object_name: urlInfo.object_name, filename: f.name});
-}
-async function pollImportStatus(elapsedSec){
-  const msg = document.getElementById('importMsg');
-  if(elapsedSec === undefined) elapsedSec = 0;
-  try{
-    const s = await apiGet('/api/ingest/status');
-    if(s.status === 'processing'){
-      msg.innerHTML = `<div class="msg info">背景解析中…已等待 ${elapsedSec} 秒（資料量大時可能需要數分鐘，可切換到其他頁面，等等再回來看）</div>`;
-      setTimeout(()=>pollImportStatus(elapsedSec+2), 2000);
-    } else if(s.status === 'ready'){
-      msg.innerHTML = `<div class="msg success">匯入成功：${s.row_count.toLocaleString()} 列</div>`;
-      showImportPreview(s);
-    } else if(s.status === 'error'){
-      msg.innerHTML = `<div class="msg error">匯入失敗：${escHtml(s.error||'')}</div>`;
-    }
-  }catch(e){ msg.innerHTML = `<div class="msg error">查詢匯入狀態失敗：${escHtml(e.message)}</div>`; }
-}
-async function doLoadSample(){
-  const msg = document.getElementById('importMsg');
-  msg.innerHTML = `<div class="msg info">載入中…</div>`;
-  try{
-    const r = await apiPost('/api/ingest/sample');
-    msg.innerHTML = `<div class="msg success">已載入內建範例資料：${r.row_count.toLocaleString()} 列</div>`;
-    cleaned = false;
-    showImportPreview(r);
-  }catch(e){ msg.innerHTML = `<div class="msg error">載入失敗：${escHtml(e.message)}</div>`; }
-}
-function showImportPreview(r){
-  const box = document.getElementById('importPreview');
-  if(!box) return;
-  if(r.missing_required_columns && r.missing_required_columns.length){
-    box.innerHTML = `<div class="msg error">缺少必要欄位：${r.missing_required_columns.join('、')}</div>`;
-    return;
-  }
-  const cols = r.columns;
-  box.innerHTML = `<table class="data-table"><thead><tr>${cols.map(c=>`<th>${escHtml(c)}</th>`).join('')}</tr></thead>
-    <tbody>${r.preview_rows.slice(0,15).map(row=>`<tr>${row.map(v=>`<td>${escHtml(v)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
-}
-
-// ================= 資料清洗 =================
-function renderClean(el){
-  el.innerHTML = `
-    <h2>資料清洗</h2>
-    <p class="subtitle">對應後端 <code>POST /api/clean/run</code>（沿用原團隊的 P零售物流data_清洗腳本.py，
-    僅把「讀檔案路徑」換成「接收上傳資料」）。</p>
-    <div class="card">
-      <button onclick="doRunClean()">▶ 執行清洗</button>
-      <button class="secondary" onclick="downloadCleanExport()">下載清洗結果 (.xlsx)</button>
-      <div id="cleanMsg"></div>
-    </div>
-    <div id="cleanResult"></div>
-    <div class="card" id="cleanPreviewCard" style="display:none;">
-      <h3>清洗結果資料預覽</h3>
-      <p class="card-sub">對應原始單檔的「清洗後乾淨資料 / 隔離資料明細 / 商品材積主檔 / 逐筆變更紀錄」四張分頁，資料來自後端 <code>GET /api/clean/preview</code>。</p>
-      <div class="field" style="max-width:280px;"><label>資料集</label>
-        <select id="cleanDataset" onchange="loadCleanPreview()">
-          <option value="clean">清洗後乾淨資料</option>
-          <option value="iso">隔離資料明細（待人工複核）</option>
-          <option value="sku_dim">商品材積主檔（一個商品ID一列）</option>
-          <option value="change_log">逐筆變更紀錄</option>
-        </select></div>
-      <p class="card-sub" id="cleanPreviewSub"></p>
-      <div class="table-scroll" id="cleanPreviewTable"><div class="empty">尚未載入</div></div>
-    </div>`;
-  refreshCleanSummary();
-}
-async function refreshCleanSummary(){
-  try{ const s = await apiGet('/api/clean/summary'); cleaned=true; renderCleanSummary(s); showCleanPreview(); }catch(e){}
-}
-async function doRunClean(){
-  const msg = document.getElementById('cleanMsg');
-  msg.innerHTML = `<div class="msg info">清洗中…（資料量大時可能需要數秒到數十秒）</div>`;
-  try{
-    const s = await apiPost('/api/clean/run');
-    cleaned = true;
-    msg.innerHTML = `<div class="msg success">清洗完成</div>`;
-    renderCleanSummary(s);
-    showCleanPreview();
-  }catch(e){ msg.innerHTML = `<div class="msg error">清洗失敗：${escHtml(e.message)}</div>`; }
-}
-function showCleanPreview(){
-  const card = document.getElementById('cleanPreviewCard');
-  if(!card) return;
-  card.style.display = '';
-  loadCleanPreview();
-}
-async function loadCleanPreview(){
-  const ds = (document.getElementById('cleanDataset')||{}).value || 'clean';
-  const box = document.getElementById('cleanPreviewTable'), sub = document.getElementById('cleanPreviewSub');
-  if(!box) return;
-  box.innerHTML = `<div class="empty">載入中…</div>`;
-  try{
-    const r = await apiGet('/api/clean/preview', {dataset:ds, limit:50, offset:0});
-    sub.textContent = `共 ${num(r.total_rows)} 列、${r.columns.length} 欄，顯示前 ${Math.min(50, r.rows.length)} 列`;
-    if(!r.rows.length){ box.innerHTML = `<div class="empty">（此資料集目前無資料）</div>`; return; }
-    box.innerHTML = `<table class="data-table"><thead><tr>${r.columns.map(c=>`<th>${escHtml(c)}</th>`).join('')}</tr></thead>
-      <tbody>${r.rows.map(row=>`<tr>${row.map(v=>`<td>${escHtml(v)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
-  }catch(e){ box.innerHTML = `<div class="empty">${escHtml(e.message)}</div>`; sub.textContent=''; }
-}
-function renderCleanSummary(s){
-  const box = document.getElementById('cleanResult');
-  const st = s.stats;
-  box.innerHTML = `
-    <div class="grid grid-3">
-      <div class="card stat-tile"><div class="label">原始列數</div><div class="value">${num(st.original_row_count)}</div></div>
-      <div class="card stat-tile"><div class="label">乾淨資料</div><div class="value ok-text">${num(st.clean_count)}</div>
-        <div class="sub">${st.row_check_ok?'✅ 列數勾稽一致':'⚠ 列數不一致'}</div></div>
-      <div class="card stat-tile"><div class="label">隔離資料</div><div class="value">${num(st.iso_count)}</div>
-        <div class="sub">待人工複核／確認</div></div>
-    </div>
-    <div class="grid grid-2">
-      <div class="card"><h3>隔離原因分布</h3>${tableFromCounts(s.iso_reason_counts,'原因')}</div>
-      <div class="card"><h3>材積來源分布</h3>${tableFromCounts(s.material_source_counts,'來源')}
-        <p class="card-sub" style="margin-top:10px;">商品材積主檔：${num(st.sku_count)} 個商品ID</p>
-        ${tableFromCounts(s.storage_class_counts,'儲位分類')}</div>
-    </div>
-    <div class="card"><p class="card-sub">逐筆變更紀錄：${num(s.change_log_count)} 筆　｜　配送地址待確認：${num(s.address_pending_confirm)} 筆</p></div>`;
-}
-function tableFromCounts(obj, label){
-  const entries = Object.entries(obj||{}).sort((a,b)=>b[1]-a[1]);
-  if(!entries.length) return `<div class="empty">（無）</div>`;
-  return `<table class="data-table"><thead><tr><th>${label}</th><th style="text-align:right;">筆數</th></tr></thead>
-    <tbody>${entries.map(([k,v])=>`<tr><td>${escHtml(k)}</td><td style="text-align:right;">${num(v)}</td></tr>`).join('')}</tbody></table>`;
-}
-function downloadCleanExport(){ window.open(API_BASE + '/api/clean/export', '_blank'); }
-
-// ================= 需求預測 =================
-let fcState = {granularity:'month', target:'qty', skuId:null, catId:null};
-function renderForecast(el){
-  el.innerHTML = `
-    <h2>需求預測</h2>
-    <p class="subtitle">對應後端 <code>GET /api/forecast/series</code>／<code>/breakdown</code>／<code>/lifecycle</code>
-    （多模型自動選模＋最後一期 hold-out 驗證）。</p>
-    ${!cleaned ? `<div class="msg info">請先到「資料清洗」頁執行清洗</div>` : `
-    <div class="card">
-      <div class="row">
-        <div class="field"><label>時間粒度</label>
-          <select id="fcGran" onchange="onFcParamChange()"><option value="month">月</option><option value="week">週</option></select></div>
-        <div class="field"><label>指標</label>
-          <select id="fcTarget" onchange="onFcParamChange()"><option value="qty">出貨量</option><option value="cnt">訂單次數</option></select></div>
-        <div class="field"><label>商品ID（留空＝全體）</label><input type="number" id="fcSkuId" onchange="onFcParamChange()"></div>
-      </div>
-    </div>
-    <div class="card"><h3>趨勢圖（最後一期為測試區，比對預測 vs 實際）</h3><div id="fcChart"></div><p class="card-sub" id="fcSub"></p></div>
-    <div class="card"><h3>各商品類別驗證結果</h3><div class="table-scroll" id="fcBreakdown"></div></div>
-    <div class="card"><h3>SKU 最後一期預測 vs 實際 Top 20</h3>
-      <p class="card-sub" id="fcSkuTopSub">取歷史出貨前 200 名 SKU 為候選池，顯示最後一期預測 vs 實際與誤差%。</p>
-      <div id="fcSkuTopChart"></div>
-      <div class="table-scroll" id="fcSkuTopTable" style="margin-top:12px;"></div></div>
-    <div class="card"><h3>商品生命週期（新品／滯銷／正常）</h3><div id="fcLifecycle"></div>
-      <p class="card-sub" style="margin-top:10px;">明細（僅列出新品／滯銷，最多 50 筆）：</p>
-      <div class="table-scroll" id="fcLifecycleTable"></div></div>`}`;
-  if(cleaned) loadForecast();
-}
-function onFcParamChange(){
-  fcState.granularity = document.getElementById('fcGran').value;
-  fcState.target = document.getElementById('fcTarget').value;
-  const v = document.getElementById('fcSkuId').value;
-  fcState.skuId = v? Number(v): null;
-  loadForecast();
-}
-async function loadForecast(){
-  const chartEl = document.getElementById('fcChart'), subEl = document.getElementById('fcSub');
-  try{
-    const s = await apiGet('/api/forecast/series', {granularity:fcState.granularity, target:fcState.target, sku_id:fcState.skuId});
-    subEl.textContent = `選用模型：${s.model}　MASE：${s.mase!=null?s.mase.toFixed(2):'—'}　誤差%(WAPE)：${pct(s.wape)}`;
-    chartEl.innerHTML = lineChart(s.periods, s.actual, s.test_len, s.pred_tail);
-  }catch(e){ chartEl.innerHTML = `<div class="empty">${escHtml(e.message)}</div>`; subEl.textContent=''; }
-
-  try{
-    const b = await apiGet('/api/forecast/breakdown', {granularity:fcState.granularity, target:fcState.target});
-    document.getElementById('fcBreakdown').innerHTML = `<table class="data-table"><thead><tr>
-      <th>商品類別</th><th style="text-align:right;">測試期實際</th><th style="text-align:right;">測試期預測</th>
-      <th style="text-align:right;">誤差%</th><th style="text-align:right;">MASE</th><th>選用模型</th></tr></thead><tbody>
-      ${b.rows.map(r=>`<tr><td>${escHtml(r.name)}</td><td style="text-align:right;">${num(r.actual_sum)}</td>
-        <td style="text-align:right;">${num(r.pred_sum)}</td><td style="text-align:right;">${pct(r.wape)}</td>
-        <td style="text-align:right;">${r.mase!=null?r.mase.toFixed(2):'—'}</td><td>${escHtml(r.model)}</td></tr>`).join('')}
-      </tbody></table>`;
-  }catch(e){ document.getElementById('fcBreakdown').innerHTML = `<div class="empty">${escHtml(e.message)}</div>`; }
-
-  try{
-    const st = await apiGet('/api/forecast/sku_top', {granularity:fcState.granularity, target:fcState.target, candidate_n:200, top_n:20});
-    document.getElementById('fcSkuTopSub').textContent =
-      `取歷史${fcState.target==='cnt'?'訂單次數':'出貨量'}前 ${st.candidate_count} 名 SKU（共 ${num(st.total_sku_count)} 個有效 SKU），顯示最後一期預測 vs 實際與誤差%。`;
-    // 圖：Top 10 的「測試期實際 vs 預測」並排長條，太多根會擠，取前 10 名即可看出貼合度
-    const top10 = st.rows.slice(0,10);
-    const bars = [];
-    top10.forEach(r=>{ const lab=truncate(r.name||('#'+r.id),8);
-      bars.push({label:lab+'·實', value:r.actual_sum, color:'var(--seq-2)'});
-      bars.push({label:lab+'·預', value:r.pred_sum, color:'var(--brand)'}); });
-    document.getElementById('fcSkuTopChart').innerHTML = bars.length
-      ? columnChart(bars, {w:760, h:300, valueLabel:'測試期'}) + `<div class="wh-legend" style="margin-top:4px;">
-          <span><span class="sw" style="background:var(--seq-2);"></span>測試期實際</span>
-          <span><span class="sw" style="background:var(--brand);"></span>測試期預測</span></div>`
-      : `<div class="empty">無足夠資料</div>`;
-    document.getElementById('fcSkuTopTable').innerHTML = !st.rows.length ? `<div class="empty">無資料</div>` :
-      `<table class="data-table"><thead><tr><th>#</th><th>商品ID</th><th>商品名稱</th><th>類別</th>
-        <th style="text-align:right;">測試期實際</th><th style="text-align:right;">測試期預測</th>
-        <th style="text-align:right;">逐期誤差%</th><th style="text-align:right;">總量誤差%</th><th>選用模型</th></tr></thead><tbody>
-      ${st.rows.map((r,i)=>`<tr><td>${i+1}</td><td>${r.id}</td><td>${escHtml(r.name)}</td><td>${escHtml(r.cat_name)}</td>
-        <td style="text-align:right;">${num(r.actual_sum)}</td><td style="text-align:right;">${num(r.pred_sum)}</td>
-        <td style="text-align:right;">${pct(r.wape)}</td><td style="text-align:right;">${pct(r.tot_err)}</td><td>${escHtml(r.model)}</td></tr>`).join('')}
-      </tbody></table>`;
-  }catch(e){
-    document.getElementById('fcSkuTopChart').innerHTML = `<div class="empty">${escHtml(e.message)}</div>`;
-    document.getElementById('fcSkuTopTable').innerHTML = '';
-  }
-
-  try{
-    const lc = await apiGet('/api/forecast/lifecycle', {granularity:fcState.granularity, recent_n:2});
-    document.getElementById('fcLifecycle').innerHTML = `<div class="grid grid-3">
-      <div class="stat-tile"><div class="label">新品</div><div class="value ok-text">${lc.counts['新品']}</div><div class="sub">首次出貨在最近 ${lc.recent_n} 期</div></div>
-      <div class="stat-tile"><div class="label">正常／持續</div><div class="value">${lc.counts['正常']}</div><div class="sub">共 ${num(lc.rows.length)} 個有效 SKU</div></div>
-      <div class="stat-tile"><div class="label">滯銷／沉睡</div><div class="value bad-text">${lc.counts['滯銷']}</div><div class="sub">最近 ${lc.recent_n} 期無出貨</div></div>
-    </div>`;
-    const preview = lc.rows.filter(r=>r.cls!=='正常').sort((a,b)=> a.cls===b.cls?0:(a.cls==='新品'?-1:1)).slice(0,50);
-    document.getElementById('fcLifecycleTable').innerHTML = !preview.length ? `<div class="empty">目前視窗下沒有新品或滯銷 SKU</div>` :
-      `<table class="data-table"><thead><tr><th>分類</th><th>商品ID</th><th>商品名稱</th>
-        <th>首次出貨</th><th>最近出貨</th><th style="text-align:right;">有量期數</th><th style="text-align:right;">沉睡期數</th></tr></thead><tbody>
-      ${preview.map(r=>`<tr><td><span class="chip ${r.cls==='新品'?'C':'A'}">${r.cls}</span></td><td>${r.sku}</td><td>${escHtml(r.name)}</td>
-        <td>${escHtml(r.first)}</td><td>${escHtml(r.last)}</td><td style="text-align:right;">${r.nz}</td><td style="text-align:right;">${r.dorm_months}</td></tr>`).join('')}
-      </tbody></table>`;
-  }catch(e){ document.getElementById('fcLifecycle').innerHTML = `<div class="empty">${escHtml(e.message)}</div>`; }
-}
 function lineChart(periods, actual, testLen, predTail){
-  if(!periods.length) return `<div class="empty">無資料</div>`;
+  if(!periods.length) return emptyState('無資料');
   const w=760,h=280,padL=54,padR=16,padT=16,padB=44, plotW=w-padL-padR, plotH=h-padT-padB;
   const n=periods.length, testStart=n-testLen;
   const maxVal = Math.max(...actual, ...predTail, 1)*1.15;
@@ -583,10 +1053,9 @@ function lineChart(periods, actual, testLen, predTail){
   return svg;
 }
 
-// 簡易長條圖：bars=[{label,value,color}]。供揀貨回合數比較、KPI 距離比較共用。
 function barChart(bars, opts){
   opts = opts||{};
-  if(!bars || !bars.length) return `<div class="empty">無資料</div>`;
+  if(!bars || !bars.length) return emptyState('無資料');
   const w=opts.w||520, h=opts.h||240, padL=58, padR=16, padT=18, padB=46, plotW=w-padL-padR, plotH=h-padT-padB;
   const maxVal = Math.max(...bars.map(b=>b.value), 1)*1.18;
   const n=bars.length, gap=plotW/n, bw=Math.min(120, gap*0.5);
@@ -601,18 +1070,12 @@ function barChart(bars, opts){
   return svg;
 }
 
-// ---- 共用小工具與圖表：自原始單檔 儲位配置與揀貨策略優化系統.html 的 render* 函式移植，
-//      改成「回傳 SVG 字串」給呼叫端塞進 innerHTML，並改用本檔的 CSS 變數與 showTip/hideTip。----
-function truncate(s, n){ s=String(s??''); return s.length>n ? s.slice(0,n-1)+'…' : s; }
-const ABC_COLOR = {A:'#e8564a', B:'#f0b13c', C:'#7cc47c'};   // 與倉儲熱度圖同一組配色
-// 熱力圖用的連續色階（以品牌藍 #2a78d6 為底，深淺代表大小）
+const ABC_COLOR = {A:'#e8564a', B:'#f0b13c', C:'#7cc47c'};
 function heatColor(t){ const a = 0.10 + 0.85*Math.max(0,Math.min(1,t)); return `rgba(42,120,214,${a.toFixed(3)})`; }
 
-// SKU 累積佔比曲線（Pareto）：橫軸為 SKU 排名百分位，縱軸累積佔比，並以 A/B 分界線切出三段熱度區。
-// pareto = {points:[{x,y}...], a_pct, b_pct}（由後端 /api/abc/sku 對「全部」SKU 取樣算出，不受 limit 影響）。
 function paretoCurve(pareto, aThresh, bThresh){
   const pts = pareto && pareto.points || [];
-  if(!pts.length) return `<div class="empty">尚無可計算之 SKU 資料</div>`;
+  if(!pts.length) return emptyState('尚無可計算之 SKU 資料');
   const W=620,H=320,M={top:14,right:16,bottom:54,left:42};
   const iw=W-M.left-M.right, ih=H-M.top-M.bottom;
   const x=v=>M.left+(v/100)*iw, y=v=>M.top+ih-(v/100)*ih;
@@ -640,9 +1103,8 @@ function paretoCurve(pareto, aThresh, bThresh){
   return svg;
 }
 
-// 類別 Pareto：每個類別一根長條（佔比）＋一條累積佔比折線（少量類別時比曲線更好讀）。
 function paretoBars(items){
-  if(!items || !items.length) return `<div class="empty">尚無可計算之類別資料</div>`;
+  if(!items || !items.length) return emptyState('尚無可計算之類別資料');
   const w=620,h=300,padL=38,padR=14,padT=14,padB=90, plotW=w-padL-padR, plotH=h-padT-padB;
   const n=items.length, gap=plotW/n, bw=Math.min(30, gap-8);
   let svg=`<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;overflow:visible;">`;
@@ -663,10 +1125,9 @@ function paretoBars(items){
   return svg;
 }
 
-// 類別 × 類別 共同揀取熱力圖（對稱矩陣，對角線為自身、以灰色標示）。
 function heatmapChart(labels, matrix, maxV, valueLabel, fmt){
   fmt = fmt || (v=>v);
-  if(!labels || !labels.length) return `<div class="empty">資料量不足以計算共同揀取關係（需同一訂單內出現 2 種以上類別）</div>`;
+  if(!labels || !labels.length) return emptyState('資料量不足以計算共同揀取關係（需同一訂單內出現 2 種以上類別）');
   const n=labels.length, cell=Math.max(20, Math.min(42, Math.round(520/n))), padL=110, padT=14;
   const w=padL+cell*n+8, h=padT+cell*n+96;
   let svg=`<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;">`;
@@ -679,10 +1140,9 @@ function heatmapChart(labels, matrix, maxV, valueLabel, fmt){
   return svg;
 }
 
-// 分組長條圖（Top N）：items=[{label,value,color}]，供 SKU Top-20 等使用。
 function columnChart(items, opts){
   opts=opts||{};
-  if(!items || !items.length) return `<div class="empty">無資料</div>`;
+  if(!items || !items.length) return emptyState('無資料');
   const niceMax=v=>{ if(v<=0) return 10; const mag=Math.pow(10,Math.floor(Math.log10(v))); const nrm=v/mag; const n2=nrm<=1?1:nrm<=2?2:nrm<=5?5:10; return n2*mag; };
   const w=opts.w||560, h=opts.h||280, padL=54, padR=16, padT=20, padB=64, plotW=w-padL-padR, plotH=h-padT-padB;
   const maxVal=niceMax(Math.max(...items.map(i=>i.value))*1.08);
@@ -697,176 +1157,39 @@ function columnChart(items, opts){
   return svg;
 }
 
-// ================= 儲位配置（ABC＋共同揀取＋分區）=================
-let abcParams = {a:70, b:90};
-let copickSort = 'lift';      // 商品共同揀取表排序：'lift' | 'count'
-let heatMetric = 'count';     // 類別共同揀取熱力圖數值：'count' | 'lift'
-let catCopickCache = null;    // /api/copick/category 結果快取（切換 count/lift 免重打）
-function renderAbc(el){
-  el.innerHTML = `
-    <h2>儲位配置</h2>
-    <p class="subtitle">對應後端 <code>/api/abc/*</code>、<code>/api/copick/*</code>、<code>/api/storage/*</code>。</p>
-    ${!cleaned ? `<div class="msg info">請先到「資料清洗」頁執行清洗</div>` : `
-    <div class="card">
-      <div class="row">
-        <div class="field"><label>A 級門檻（累積佔比 ≤）：<span id="aVal">70%</span></label>
-          <input type="range" id="aSlider" min="10" max="95" value="70" oninput="onAbcSliderChange()"></div>
-        <div class="field"><label>B 級門檻（累積佔比 ≤）：<span id="bVal">90%</span></label>
-          <input type="range" id="bSlider" min="10" max="99" value="90" oninput="onAbcSliderChange()"></div>
-      </div>
-    </div>
-    <div class="card">
-      <h3>倉儲配置圖（改善前 vs 改善後）</h3>
-      <p class="card-sub">幾何比照原始倉儲平面圖。左＝改善前（現行類別配置，綠＝棧板區／橙＝貨架區）；右＝改善後（ABC 熱度配置，
-        <span style="color:#e8564a;font-weight:600;">紅＝A 近</span>／<span style="color:#f0b13c;font-weight:600;">橙＝B 中</span>／<span style="color:#7cc47c;font-weight:600;">綠＝C 遠</span>，依走道動線距離由近到遠分配）。滑鼠移到區塊看說明。</p>
-      <div class="grid grid-2">
-        <div><div class="card-sub" style="font-weight:600;">改善前配置（現行類別配置）</div><div class="wh-map" id="whBeforeMap"></div></div>
-        <div><div class="card-sub" style="font-weight:600;">改善後配置（ABC 熱度配置＋共同揀取）</div><div class="wh-map" id="whAfterMap"></div></div>
-      </div>
-      <div class="wh-legend">
-        <span><span class="sw" style="background:#e8564a;"></span>A 級（近）</span>
-        <span><span class="sw" style="background:#f0b13c;"></span>B 級（中）</span>
-        <span><span class="sw" style="background:#7cc47c;"></span>C 級（遠）</span>
-        <span><span class="sw" style="background:#3ba33b;"></span>棧板區（改善前）</span>
-        <span><span class="sw" style="background:#e8930c;"></span>貨架區（改善前）</span>
-        <span><span class="sw" style="background:var(--critical);border-radius:50%;"></span>★ 出貨基準點</span>
-      </div>
-    </div>
-    <div class="card"><h3>Pareto 分析（SKU 累積佔比曲線）</h3>
-      <p class="card-sub">橫軸＝SKU 排名百分位、縱軸＝累積出貨佔比；A／B 分界線與上方門檻連動，可看出少數 SKU 貢獻多數出貨的長尾現象。</p>
-      <div id="skuParetoChart"><div class="empty">載入中…</div></div></div>
-    <div class="card"><h3>SKU ABC 分級（依出現訂單次數）</h3><p class="card-sub" id="skuAbcSub"></p><div class="table-scroll" id="skuAbcTable"></div></div>
-    <div class="card"><h3>商品類別 ABC 分級</h3>
-      <div id="catParetoChart"><div class="empty">載入中…</div></div>
-      <div class="table-scroll" id="catAbcTable" style="margin-top:12px;"></div></div>
-    <div class="card"><h3>商品共同揀取（同一張訂單一起出現，供 A／B 級相鄰參考）</h3>
-      <div class="row" style="align-items:center; gap:8px; margin-bottom:8px;">
-        <span class="card-sub" style="margin:0;">排序：</span>
-        <button class="secondary" id="copickSortLift" onclick="setCopickSort('lift')">依 Lift</button>
-        <button class="secondary" id="copickSortCount" onclick="setCopickSort('count')">依共同次數</button>
-      </div>
-      <div class="table-scroll" id="copickTable"></div></div>
-    <div class="card"><h3>類別共同揀取熱力圖（供 C 級類別群組相鄰參考）</h3>
-      <p class="card-sub">列／欄皆為出貨次數前 20 名的商品類別；顏色越深＝越常一起出現（或 Lift 越高），對角線為類別自身。</p>
-      <div class="row" style="align-items:center; gap:8px; margin-bottom:8px;">
-        <span class="card-sub" style="margin:0;">數值：</span>
-        <button class="secondary" id="heatMetricCount" onclick="setHeatMetric('count')">共同出貨次數</button>
-        <button class="secondary" id="heatMetricLift" onclick="setHeatMetric('lift')">Lift</button>
-      </div>
-      <div id="catCopickHeatmap"><div class="empty">載入中…</div></div></div>
-    <div class="card"><h3>儲位配置建議（依類別出貨次數，由近到遠分配分區）</h3>
-      <div class="grid grid-3" id="storageTiles" style="margin-bottom:12px;"></div>
-      <p class="card-sub" id="storageSub"></p><div class="table-scroll" id="storageTable"></div></div>`}`;
-  if(cleaned) loadAbc();
-}
-function onAbcSliderChange(){
-  abcParams.a = Number(document.getElementById('aSlider').value);
-  abcParams.b = Number(document.getElementById('bSlider').value);
-  document.getElementById('aVal').textContent = abcParams.a+'%';
-  document.getElementById('bVal').textContent = abcParams.b+'%';
-  loadAbc();
-}
-async function loadAbc(){
-  try{
-    const r = await apiGet('/api/abc/sku', {a_thresh:abcParams.a, b_thresh:abcParams.b, limit:100});
-    document.getElementById('skuParetoChart').innerHTML = paretoCurve(r.pareto, abcParams.a, abcParams.b);
-    document.getElementById('skuAbcSub').textContent = `共 ${r.total_sku_count} 個 SKU（A級 ${r.class_counts.A}／B級 ${r.class_counts.B}／C級 ${r.class_counts.C}），顯示前100`;
-    document.getElementById('skuAbcTable').innerHTML = `<table class="data-table"><thead><tr>
-      <th>#</th><th>商品ID</th><th>名稱</th><th style="text-align:right;">出現訂單數</th><th style="text-align:right;">佔比</th><th style="text-align:right;">累計%</th><th>級</th></tr></thead><tbody>
-      ${r.items.map((it,i)=>`<tr><td>${i+1}</td><td>${it.id}</td><td>${escHtml(it.name)}</td>
-        <td style="text-align:right;">${num(it.freq)}</td><td style="text-align:right;">${pct(it.share)}</td>
-        <td style="text-align:right;">${pct(it.cum)}</td><td><span class="chip ${it.cls}">${it.cls}</span></td></tr>`).join('')}</tbody></table>`;
-  }catch(e){ document.getElementById('skuAbcTable').innerHTML = `<div class="empty">${escHtml(e.message)}</div>`; }
+/* ---------------- 倉儲平面圖（改善前／改善後雙圖，自原型 renderWhDiagram／computeCellRoutedDist 移植） ----------------
+   幾何資料（牆線／分區座標／出入口／每分區的代理格子 cells）為靜態資料（warehouse_geometry.js 的
+   WH_DATA），純粹描述倉庫平面配置本身，不含任何商品或訂單數據，所以下面的「格子到出貨點的繞行距離」
+   計算（computeCellRoutedDist，逐格 BFS 走格子地圖）也是單純幾何／路徑搜尋，跟原型一樣是前端就地
+   算，不算業務統計邏輯——原型裡這段本來就是純前端函式（見原型第 6612 行 computeCellRoutedDist）。
 
-  try{
-    const r = await apiGet('/api/abc/category', {a_thresh:abcParams.a, b_thresh:abcParams.b});
-    document.getElementById('catAbcTable').innerHTML = `<table class="data-table"><thead><tr>
-      <th>商品類別</th><th style="text-align:right;">出貨次數</th><th style="text-align:right;">SKU數</th>
-      <th style="text-align:right;">佔比</th><th style="text-align:right;">累計%</th><th>級</th></tr></thead><tbody>
-      ${r.categories.map(c=>`<tr><td>${escHtml(c.name)}</td><td style="text-align:right;">${num(c.freq)}</td>
-        <td style="text-align:right;">${c.sku_count}</td><td style="text-align:right;">${pct(c.share)}</td>
-        <td style="text-align:right;">${pct(c.cum)}</td><td><span class="chip ${c.cls}">${c.cls}</span></td></tr>`).join('')}</tbody></table>`;
-    document.getElementById('catParetoChart').innerHTML = paretoBars(r.categories);
-    renderWarehousePanels(r.categories);   // 用類別 ABC 佔比驅動改善後熱度圖
-  }catch(e){ document.getElementById('catAbcTable').innerHTML = `<div class="empty">${escHtml(e.message)}</div>`; }
-
-  loadCopickTable();
-  loadCatCopickHeatmap();
-
-  try{
-    const r = await apiGet('/api/storage/assignment', {a_thresh:abcParams.a, b_thresh:abcParams.b});
-    const imp = r.improvement_pct;
-    document.getElementById('storageTiles').innerHTML = `
-      <div class="card stat-tile"><div class="label">距離改善率</div>
-        <div class="value" style="color:${imp>=10?'var(--good)':'var(--bad)'};">${imp.toFixed(1)}%</div>
-        <div class="sub" style="color:${imp>=10?'var(--good)':'var(--bad)'};">${imp>=10?'✅ 達成 ≥10% 目標':'尚未達 10% 目標'}</div></div>
-      <div class="card stat-tile"><div class="label">平均動線距離</div>
-        <div class="value" style="font-size:20px;">${r.baseline_dist_m.toFixed(1)} → ${r.weighted_dist_m.toFixed(1)} m</div>
-        <div class="sub">未規劃基準 → 依 ABC 配置</div></div>
-      <div class="card stat-tile"><div class="label">出貨量涵蓋率</div>
-        <div class="value">${r.coverage_pct.toFixed(1)}%</div>
-        <div class="sub">可用儲位 ${r.pool_size} 個</div></div>`;
-    document.getElementById('storageSub').textContent =
-      `依實際出貨次數由高到低排序，共 ${r.categories.length} 個商品類別；「建議儲位數」為 0 代表出貨量太小、依比例分不到獨立儲位，建議併入鄰近類別。`;
-    document.getElementById('storageTable').innerHTML = `<table class="data-table"><thead><tr>
-      <th>#</th><th>商品類別</th><th>級</th><th style="text-align:right;">出貨次數</th><th style="text-align:right;">佔比</th><th style="text-align:right;">建議儲位數</th>
-      <th style="text-align:right;">平均距離(m)</th><th>主要分區</th></tr></thead><tbody>
-      ${r.categories.map((c,i)=>`<tr><td>${i+1}</td><td>${escHtml(c.name)}</td><td><span class="chip ${c.cls}">${c.cls}</span></td>
-        <td style="text-align:right;">${num(c.freq)}</td><td style="text-align:right;">${pct(c.share)}</td><td style="text-align:right;">${c.cell_count}</td>
-        <td style="text-align:right;">${c.avg_dist!=null?c.avg_dist.toFixed(1):'—'}</td>
-        <td>${(c.zone_breakdown||[]).slice(0,3).map(z=>`${escHtml(z[0])}×${z[1]}`).join('、')||'（未分配）'}</td></tr>`).join('')}</tbody></table>`;
-  }catch(e){ document.getElementById('storageTable').innerHTML = `<div class="empty">${escHtml(e.message)}</div>`; }
-}
-
-// 商品共同揀取表（可切換依 Lift／共同次數排序）——對應原 renderSkuPairTable + switchSkuPairSort。
-function setCopickSort(sort){ copickSort = sort; loadCopickTable(); }
-async function loadCopickTable(){
-  const box = document.getElementById('copickTable'); if(!box) return;
-  const bl = document.getElementById('copickSortLift'), bc = document.getElementById('copickSortCount');
-  if(bl && bc){ bl.className = copickSort==='lift'?'':'secondary'; bc.className = copickSort==='count'?'':'secondary'; }
-  box.innerHTML = `<div class="empty">載入中…</div>`;
-  try{
-    const r = await apiGet('/api/copick/sku', {sort:copickSort, limit:20});
-    box.innerHTML = !r.pairs.length ? `<div class="empty">目前資料量下無達門檻的共同揀取組合（門檻：共同次數 ≥ ${r.count_thresh}）</div>` :
-      `<table class="data-table"><thead><tr><th>商品A</th><th>商品B</th>
-        <th style="text-align:right;">共同次數</th><th style="text-align:right;">Support%</th><th style="text-align:right;">Lift</th></tr></thead><tbody>
-      ${r.pairs.map(p=>`<tr><td>${escHtml(p.a.name)}</td><td>${escHtml(p.b.name)}</td>
-        <td style="text-align:right;">${num(p.count)}</td><td style="text-align:right;">${p.support.toFixed(2)}%</td>
-        <td style="text-align:right;">${p.lift.toFixed(2)}</td></tr>`).join('')}</tbody></table>`;
-  }catch(e){ box.innerHTML = `<div class="empty">${escHtml(e.message)}</div>`; }
-}
-
-// 類別共同揀取熱力圖（可切換 共同次數／Lift）——對應原 renderHeatmap + switchHeatMetric。
-function setHeatMetric(m){ heatMetric = m; renderCatHeatmap(); }
-async function loadCatCopickHeatmap(){
-  catCopickCache = null;
-  try{ catCopickCache = await apiGet('/api/copick/category', {cap_n:20}); }
-  catch(e){ const el = document.getElementById('catCopickHeatmap'); if(el) el.innerHTML = `<div class="empty">${escHtml(e.message)}</div>`; return; }
-  renderCatHeatmap();
-}
-function renderCatHeatmap(){
-  const el = document.getElementById('catCopickHeatmap'); if(!el) return;
-  const bc = document.getElementById('heatMetricCount'), blf = document.getElementById('heatMetricLift');
-  if(bc && blf){ bc.className = heatMetric==='count'?'':'secondary'; blf.className = heatMetric==='lift'?'':'secondary'; }
-  const cp = catCopickCache;
-  if(!cp || !cp.labels || !cp.labels.length){ el.innerHTML = `<div class="empty">資料量不足以計算類別共同揀取關係（需同一訂單內出現 2 種以上類別）</div>`; return; }
-  if(heatMetric==='count') el.innerHTML = heatmapChart(cp.labels, cp.matrix, cp.max, '共同出貨次數', v=>Number(v).toLocaleString());
-  else el.innerHTML = heatmapChart(cp.labels, cp.lift_matrix, cp.max_lift, 'Lift', v=>Number(v).toFixed(2));
-}
-
-// ================= 倉儲平面圖（改善前/改善後雙圖）=================
-// 幾何與畫圖邏輯自原始單檔 儲位配置與揀貨策略優化系統.html 移植（WH_DATA 見 warehouse_geometry.js）。
-// 資料來源改為後端 API：以 /api/abc/category 回傳的各級出貨佔比，決定「改善後」熱度格的 A/B/C 比例。
-const WHZ = WH_DATA.zones, WH_META = WH_DATA.meta;
+   後端 zones_config.json 已改成跟這份幾何檔用同一套分區代號（R1..R10／L1..L14，依材質＋距離排序
+   對應），所以後端回傳的 zone_before_cats／zone_after_class／單一 SKU 的 zone 代號都可以直接拿來
+   跟 WH_DATA.zones 的 code 互查，查詢單一商品時可以精準標出唯一一個分區（比照原型 highlight 單一
+   分區的做法）。「改善後」整張圖的底色仍用 after_prop（貨架／棧板各 A/B/C 佔比，純數字）依繞行距離
+   逐格分配上色——這是刻意的視覺選擇：原型的 renderWhDiagram 就算在分區代號完全可靠的情況下，也是
+   用這種逐格漸層畫熱度分布圖（而非整區塊一色），只有「查詢單一商品」才會精準標出那一個分區，兩者
+   分工跟原型一致。分級比例 100% 來自後端運算，前端只負責決定每格該塗哪個顏色。 ---------------- */
+const WHZ = (typeof WH_DATA !== 'undefined') ? WH_DATA.zones : [];
 function whIsPallet(z){ return z.kind!=='shelf'; }
-function escTip(s){ return String(s).replace(/'/g,"&#39;").replace(/"/g,'&quot;'); }
-function showTip(evt, html){ const t=document.getElementById('globalTooltip'); t.innerHTML=html; t.style.left=(evt.pageX+12)+'px'; t.style.top=(evt.pageY+12)+'px'; t.classList.add('show'); }
-function hideTip(){ document.getElementById('globalTooltip').classList.remove('show'); }
 
-// 沿走道曼哈頓距離（BFS，會繞牆繞棧板、跨倉經入口）——完全自原始檔移植，只依賴 WH_DATA。
-var WH_CELL_DIST=null;
+function zoneCellsBBox(z){
+  let cells=z.cells||[];
+  if(z.code==='L7'){ const _s=337/324; cells=cells.map(c=>[c[0], 3+(c[1]-16)*_s, c[2], c[3]*_s, c[4]]); }
+  let bx=1e9,by=1e9,bX=-1e9,bY=-1e9;
+  cells.forEach(c=>{ if(c[0]<bx)bx=c[0]; if(c[1]<by)by=c[1]; if(c[0]+c[2]>bX)bX=c[0]+c[2]; if(c[1]+c[3]>bY)bY=c[1]+c[3]; });
+  if(bx===1e9){ bx=0;by=0;bX=z.w;bY=z.h; }
+  return {cells, ox:z.x+bx, oy:z.y+by, ow:bX-bx, oh:bY-by};
+}
+
+// 純幾何路徑搜尋（跟原型一樣，不吃任何商品／訂單資料）：在整張平面圖上鋪 12px 網格，繞開牆／分區／
+// 結構物，從「出貨暫存區」（facilities 裡 kind==='origin' 的那塊）BFS 展開，算出每個可走格子離出貨點
+// 的步數；再取每個分區的「代理格子」cells 各自離出貨點最近的可走格子當基準，換算出每個代理格子自己
+// 的繞行距離（zbase＋離存取點的直線距離），供 renderWhDiagram 依「格子」而非「整個分區」由近到遠排序。
+var WH_CELL_DIST = null;
 function computeCellRoutedDist(){
   if(WH_CELL_DIST) return WH_CELL_DIST;
+  if(typeof WH_DATA === 'undefined') return new Map();
   const vb=WH_DATA.viewBox, GS=12;
   const cols=Math.ceil(vb.w/GS), rows=Math.ceil(vb.h/GS);
   const nx=(gx)=>vb.x+gx*GS+GS/2, ny=(gy)=>vb.y+gy*GS+GS/2;
@@ -882,7 +1205,9 @@ function computeCellRoutedDist(){
     return true; }
   const N=cols*rows, walk=new Array(N), dist=new Array(N).fill(-1);
   for(let gy=0;gy<rows;gy++)for(let gx=0;gx<cols;gx++){ walk[gy*cols+gx]=walkable(nx(gx),ny(gy))?1:0; }
-  const og=WH_DATA.facilities.find(f=>f.kind==='origin'); const ox=og.x+og.w/2, oy=og.y+og.h/2;
+  const og=WH_DATA.facilities.find(f=>f.kind==='origin');
+  if(!og){ WH_CELL_DIST=new Map(); return WH_CELL_DIST; }
+  const ox=og.x+og.w/2, oy=og.y+og.h/2;
   let ogx=Math.round((ox-vb.x)/GS-0.5), ogy=Math.round((oy-vb.y)/GS-0.5), seed=-1;
   for(let r=0;r<25&&seed<0;r++)for(let dy=-r;dy<=r&&seed<0;dy++)for(let dx=-r;dx<=r;dx++){ const gx=ogx+dx,gy=ogy+dy; if(gx<0||gy<0||gx>=cols||gy>=rows) continue; if(walk[gy*cols+gx]){ seed=gy*cols+gx; } if(seed>=0) break; }
   const q=[]; if(seed>=0){ dist[seed]=0; q.push(seed); }
@@ -890,49 +1215,51 @@ function computeCellRoutedDist(){
   while(head<q.length){ const cur=q[head++]; const cgx=cur%cols, cgy=(cur/cols)|0; const cx=nx(cgx), cy=ny(cgy);
     for(const d of dirs){ const ax=cgx+d[0], ay=cgy+d[1]; if(ax<0||ay<0||ax>=cols||ay>=rows) continue; const ai=ay*cols+ax; if(!walk[ai]||dist[ai]>=0) continue; if(d[1]!==0 && !crossOK(cx,cy,ny(ay))) continue; dist[ai]=dist[cur]+1; q.push(ai); } }
   const res=new Map();
-  WH_DATA.zones.forEach(z=>{ const cells=z.cells||[]; const got=[];
-    cells.forEach((c,i)=>{ const cx=z.x+c[0]+c[2]/2, cy=z.y+c[1]+c[3]/2; let gx=Math.round((cx-vb.x)/GS-0.5), gy=Math.round((cy-vb.y)/GS-0.5), best=-1;
-      for(let r=0;r<10&&best<0;r++)for(let dy=-r;dy<=r&&best<0;dy++)for(let dx=-r;dx<=r;dx++){ const ax=gx+dx,ay=gy+dy; if(ax<0||ay<0||ax>=cols||ay>=rows) continue; const v=dist[ay*cols+ax]; if(v>=0){ best=v; } if(best>=0) break; }
-      res.set(z.code+'_'+i, best>=0?best:99999); if(best>=0) got.push({cx,cy,d:best}); });
-    if(got.length){ cells.forEach((c,i)=>{ if(res.get(z.code+'_'+i)===99999){ const cx=z.x+c[0]+c[2]/2, cy=z.y+c[1]+c[3]/2; let bd=got[0].d, bb=Infinity; for(const g of got){ const dd=(g.cx-cx)*(g.cx-cx)+(g.cy-cy)*(g.cy-cy); if(dd<bb){bb=dd; bd=g.d;} } res.set(z.code+'_'+i, bd); } }); }
+  WH_DATA.zones.forEach(z=>{ const cells=z.cells||[]; if(!cells.length) return;
+    let zbase=Infinity, ax=0, ay=0;
+    for(const c of cells){ const cx=z.x+c[0]+c[2]/2, cy=z.y+c[1]+c[3]/2; let gx=Math.round((cx-vb.x)/GS-0.5), gy=Math.round((cy-vb.y)/GS-0.5), found=false;
+      for(let r=0;r<12&&!found;r++)for(let dy=-r;dy<=r&&!found;dy++)for(let dx=-r;dx<=r;dx++){ const nxg=gx+dx,nyg=gy+dy; if(nxg<0||nyg<0||nxg>=cols||nyg>=rows) continue; const v=dist[nyg*cols+nxg]; if(v>=0){ if(v<zbase){ zbase=v; ax=nx(nxg); ay=ny(nyg); } found=true; break; } }
+    }
+    if(!isFinite(zbase)) zbase=9999;
+    for(let i=0;i<cells.length;i++){ const c=cells[i]; const cx=z.x+c[0]+c[2]/2, cy=z.y+c[1]+c[3]/2; const ed=Math.hypot(cx-ax,cy-ay)/GS; res.set(z.code+'_'+i, zbase+ed); }
   });
   WH_CELL_DIST=res; return res;
 }
 
-// 依後端 ABC 類別佔比算出「改善後」熱度格的 A/B/C 比例（shelf/pallet 同比例，資料驅動）。
-function whAfterPropFromCategories(cats){
-  let a=0,b=0,c=0;
-  (cats||[]).forEach(x=>{ const f=x.freq||0; if(x.cls==='A')a+=f; else if(x.cls==='B')b+=f; else c+=f; });
-  const t=a+b+c||1, p={A:a/t, B:b/t, C:c/t};
-  return {shelf:p, pallet:p};
+// 依後端給的 A/B/C 佔比（貨架／棧板分開），把「這份幾何檔自己的」所有代理格子依繞行距離近到遠
+// 分配等級，回傳 Map<"分區代號_格子序號","A"|"B"|"C">。
+// afterProp = {shelf:{A,B,C}, pallet:{A,B,C}}（0~1 小數，來自 /api/storage/wh_assignment 的 after_prop）。
+function cellsToClassMap(afterProp){
+  const map = new Map();
+  if(!afterProp) return map;
+  const CD = computeCellRoutedDist();
+  ['shelf','pallet'].forEach(mat=>{
+    const zs = WHZ.filter(z => (whIsPallet(z)?'pallet':'shelf')===mat);
+    const cs = [];
+    zs.forEach(z => (z.cells||[]).forEach((c,i)=> cs.push({code:z.code, i, key:(CD.get(z.code+'_'+i) ?? 99999)})));
+    cs.sort((a,b)=> a.key-b.key);
+    const pr = afterProp[mat] || {A:0,B:0,C:0};
+    const n = cs.length, aEnd = Math.round(n*(pr.A||0)), bEnd = Math.round(n*((pr.A||0)+(pr.B||0)));
+    cs.forEach((cc,idx)=> map.set(cc.code+'_'+cc.i, idx<aEnd ? 'A' : (idx<bEnd ? 'B' : 'C')));
+  });
+  return map;
 }
 
-// 畫一張倉儲平面圖（mode='before'：依材質綠/橙上色；mode='after'：依動線距離排序後上 ABC 熱度）。
-// assign：{ afterProp:{shelf:{A,B,C},pallet:{A,B,C}}, zoneBeforeCats:{code:[類別名...]} }
-function renderWhDiagram(containerId, mode, assign, hl){
-  hl = hl||{}; const vb=WH_DATA.viewBox, A=assign;
-  const cellClassMap=new Map();
-  if(mode==='after' && A && A.afterProp){
-    const CD=computeCellRoutedDist();
-    ['shelf','pallet'].forEach(mat=>{
-      const zs=WHZ.filter(z=> (whIsPallet(z)?'pallet':'shelf')===mat);
-      const cs=[]; zs.forEach(z=> (z.cells||[]).forEach((c,i)=> cs.push({code:z.code,i,key:(CD.get(z.code+'_'+i)||99999)})));
-      cs.sort((a,b)=> a.key-b.key);
-      const pr=A.afterProp[mat]||{A:0.2,B:0.3,C:0.5}; const n=cs.length, aEnd=Math.round(n*pr.A), bEnd=Math.round(n*(pr.A+pr.B));
-      cs.forEach((cc,idx)=> cellClassMap.set(cc.code+'_'+cc.i, idx<aEnd?'A':(idx<bEnd?'B':'C')));
-    });
-  }
-  const ABCC={0:'#e8564a',1:'#f0b13c',2:'#7cc47c'};
-  function zoneCellsBBox(z){
-    let cells=z.cells||[];
-    if(z.code==='L7'){ const _s=337/324; cells=cells.map(c=>[c[0], 3+(c[1]-16)*_s, c[2], c[3]*_s, c[4]]); }
-    let bx=1e9,by=1e9,bX=-1e9,bY=-1e9;
-    cells.forEach(c=>{ if(c[0]<bx)bx=c[0]; if(c[1]<by)by=c[1]; if(c[0]+c[2]>bX)bX=c[0]+c[2]; if(c[1]+c[3]>bY)bY=c[1]+c[3]; });
-    if(bx===1e9){ bx=0;by=0;bX=z.w;bY=z.h; }
-    return {cells, ox:z.x+bx, oy:z.y+by, ow:bX-bx, oh:bY-by};
-  }
+// mode='before'：依材質綠(棧板)/橙(貨架)整區上色，滑過顯示 data.zoneBeforeCats（該分區現行類別，
+//   來自後端 zone_before_cats，代號已跟這份幾何檔一致，可直接查）。
+// mode='after' ：逐格（cellsToClassMap()）依 A/B/C 上色，視覺上比照原型的熱力漸層畫法；滑過分區時
+//   顯示 data.zoneAfterClass（該分區的後端精確分級，非前端逐格分配的近似值）。
+// highlightCode：查詢商品「改善前 / 改善後」精確所屬的單一分區代號（後端代號現在跟這份幾何檔一致，
+//   可直接對應），標出該分區的藍色發光外框——before 模式標整區，after 模式進一步只標該分區內跟
+//   highlightClass 同級的格子（比照原型：同一分區可能混著不同等級的格子）。
+function renderWhDiagram(containerId, mode, data, highlightCode, highlightClass){
+  const el = document.getElementById(containerId); if(!el || typeof WH_DATA === 'undefined') return;
+  data = data || {};
+  const cellClassMap = mode==='after' ? cellsToClassMap(data.afterProp) : null;
+  const ABCC = {A:'#e8564a', B:'#f0b13c', C:'#7cc47c'};
+  const vb = WH_DATA.viewBox;
   let svg=`<svg viewBox="${vb.x} ${vb.y} ${vb.w} ${vb.h}" style="width:100%;height:auto;">`;
-  svg+=`<defs><filter id="whglow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`;
+  svg+=`<defs><filter id="whglow-${containerId}" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`;
   svg+=`<polygon points="${WH_DATA.outline.map(p=>p.join(',')).join(' ')}" fill="none" stroke="var(--baseline)" stroke-width="4"/>`;
   WH_DATA.walls.forEach(w=> svg+=`<line x1="${w.x0}" y1="${w.y0}" x2="${w.x1}" y2="${w.y1}" stroke="var(--baseline)" stroke-width="4"/>`);
   WH_DATA.facilities.forEach(f=>{ const fill=(f.kind==='gray'||f.kind==='origin')?'var(--gridline)':'var(--surface-2)';
@@ -947,158 +1274,733 @@ function renderWhDiagram(containerId, mode, assign, hl){
     const isP=whIsPallet(z); const B=zoneCellsBBox(z);
     if(mode==='before'){
       const fill=isP?'#3ba33b':'#e8930c', oc=isP?'#2b7a2b':'#b06f00';
-      const cs=(A&&A.zoneBeforeCats&&A.zoneBeforeCats[z.code])||[];
-      const tip=`${z.code}（${isP?'棧板':'貨架'}）&lt;br&gt;所屬類別：${cs.length?escTip(cs.join('、')):'（現行配置）'}`;
-      svg+=`<rect x="${B.ox}" y="${B.oy}" width="${B.ow}" height="${B.oh}" fill="${fill}" fill-opacity="0.42" stroke="${oc}" stroke-width="2.5" onmousemove="showTip(event,'${tip}')" onmouseleave="hideTip()"/>`;
+      const cs=(data.zoneBeforeCats && data.zoneBeforeCats[z.code])||[];
+      const opTip=`${z.code}（${isP?'棧板':'貨架'}）&lt;br&gt;所屬類別：${cs.length?escTip(cs.join('、')):'（未分配）'}`;
+      svg+=`<rect x="${B.ox}" y="${B.oy}" width="${B.ow}" height="${B.oh}" fill="${fill}" fill-opacity="0.42" stroke="${oc}" stroke-width="2.5" onmousemove="showTip(event,'${opTip}')" onmouseleave="hideTip()"/>`;
     } else {
-      B.cells.forEach((c,ci)=>{ const cc=cellClassMap.get(z.code+'_'+ci); const col=cc==='A'?ABCC[0]:cc==='B'?ABCC[1]:cc==='C'?ABCC[2]:'#d9d9d9'; svg+=`<rect x="${z.x+c[0]}" y="${z.y+c[1]}" width="${c[2]}" height="${c[3]}" fill="${col}" stroke="rgba(255,255,255,0.55)" stroke-width="0.6"/>`; });
-      const m=z.abcMix||{A:0,B:0,C:0};
-      const tip=`${z.code}（${isP?'棧板':'貨架'}）&lt;br&gt;距出貨 ${z.distance_m.toFixed(1)}m（沿走道經入口）`;
-      svg+=`<rect x="${B.ox}" y="${B.oy}" width="${B.ow}" height="${B.oh}" fill="transparent" stroke="rgba(0,0,0,0.35)" stroke-width="2" onmousemove="showTip(event,'${tip}')" onmouseleave="hideTip()"/>`;
+      B.cells.forEach((c,ci)=>{
+        const cls = cellClassMap ? cellClassMap.get(z.code+'_'+ci) : null;
+        const col = ABCC[cls] || '#d9d9d9';
+        svg+=`<rect x="${z.x+c[0]}" y="${z.y+c[1]}" width="${c[2]}" height="${c[3]}" fill="${col}" stroke="rgba(255,255,255,0.55)" stroke-width="0.6"/>`;
+      });
+      const zc = (data.zoneAfterClass && data.zoneAfterClass[z.code]) || null;
+      const opTip=`${z.code}（${isP?'棧板':'貨架'}）&lt;br&gt;熱度等級：${zc||'—'}&lt;br&gt;距出貨 ${(z.distance_m||0).toFixed(1)}m（沿走道經入口）`;
+      svg+=`<rect x="${B.ox}" y="${B.oy}" width="${B.ow}" height="${B.oh}" fill="transparent" stroke="rgba(0,0,0,0.35)" stroke-width="2" onmousemove="showTip(event,'${opTip}')" onmouseleave="hideTip()"/>`;
     }
     svg+=`<text x="${B.ox+B.ow/2}" y="${B.oy+B.oh/2+9}" text-anchor="middle" font-size="26" font-weight="700" fill="#111" paint-order="stroke" stroke="#fff" stroke-width="4">${z.code}</text>`;
   });
+  if(highlightCode){
+    const z = WHZ.find(x=>x.code===highlightCode);
+    if(z){
+      const B = zoneCellsBBox(z);
+      if(mode==='before'){
+        svg+=`<rect x="${B.ox}" y="${B.oy}" width="${B.ow}" height="${B.oh}" fill="#8fc0ff" fill-opacity="0.35" stroke="#1e6fff" stroke-width="6" filter="url(#whglow-${containerId})"><animate attributeName="fill-opacity" values="0.55;0.05;0.55" dur="1.6s" repeatCount="indefinite"/><animate attributeName="stroke-opacity" values="1;0.12;1" dur="1.6s" repeatCount="indefinite"/></rect>`;
+      } else {
+        svg+=`<g filter="url(#whglow-${containerId})"><animate attributeName="stroke-opacity" values="1;0.08;1" dur="1.6s" repeatCount="indefinite"/>`;
+        B.cells.forEach((c,ci)=>{ if(highlightClass && cellClassMap && cellClassMap.get(z.code+'_'+ci)!==highlightClass) return;
+          svg+=`<rect x="${z.x+c[0]}" y="${z.y+c[1]}" width="${c[2]}" height="${c[3]}" fill="#8fc0ff" fill-opacity="0.4" stroke="#1e6fff" stroke-width="1.2"/>`; });
+        svg+=`<rect x="${B.ox}" y="${B.oy}" width="${B.ow}" height="${B.oh}" fill="none" stroke="#1e6fff" stroke-width="4"/>`;
+        svg+=`</g>`;
+      }
+    }
+  }
   WH_DATA.entrances.forEach(e=> svg+=`<line x1="${e.x0}" y1="${e.y0}" x2="${e.x1}" y2="${e.y1}" stroke="var(--critical)" stroke-width="7"/>`);
   svg+=`</svg>`;
-  document.getElementById(containerId).innerHTML=svg;
+  el.innerHTML = svg;
 }
 
-// 儲位配置頁：畫出改善前/改善後兩張倉儲圖（資料來自 /api/abc/category）。
-function renderWarehousePanels(cats){
-  const assign = { afterProp: whAfterPropFromCategories(cats), zoneBeforeCats:{} };
-  try { renderWhDiagram('whBeforeMap','before',assign,null); renderWhDiagram('whAfterMap','after',assign,null); }
-  catch(e){ const b=document.getElementById('whBeforeMap'); if(b) b.innerHTML=`<div class="empty">倉儲圖繪製失敗：${escHtml(e.message)}</div>`; }
+/* ---------------- 1. 資料匯入（自原型 handleFile／loadSampleData 移植；解析全部交給後端） ---------------- */
+function setImportStatus(msg, tone){
+  const el = document.getElementById('importStatus'); if(!el) return;
+  el.textContent = msg;
+  el.style.color = tone==='ok' ? 'var(--success-text)' : tone==='bad' ? 'var(--critical)' : 'var(--text-muted)';
+}
+function showImportProgress(msg){
+  const el = document.getElementById('importProgress'); if(!el) return;
+  el.style.display = 'block';
+  el.innerHTML = `<div class="loading-overlay"><div class="spinner"></div><div>${escHtml(msg)}</div></div>`;
+}
+function hideImportProgress(){ const el = document.getElementById('importProgress'); if(el) el.style.display = 'none'; }
+
+function initDropzone(){
+  const dz = document.getElementById('dropzone'), input = document.getElementById('fileInput');
+  if(!dz || dz.dataset.bound) return;
+  dz.dataset.bound = '1';
+  dz.addEventListener('click', ()=> input.click());
+  input.addEventListener('change', ()=>{ if(input.files[0]) doUpload(input.files[0]); });
+  ['dragenter','dragover'].forEach(ev=> dz.addEventListener(ev, e=>{ e.preventDefault(); dz.classList.add('drag'); }));
+  ['dragleave','drop'].forEach(ev=> dz.addEventListener(ev, e=>{ e.preventDefault(); dz.classList.remove('drag'); }));
+  dz.addEventListener('drop', e=>{ const f=e.dataTransfer.files[0]; if(f) doUpload(f); });
 }
 
-// ================= 揀貨策略（批次併單）=================
-function renderBatch(el){
-  el.innerHTML = `
-    <h2>揀貨策略</h2>
-    <p class="subtitle">對應後端 <code>GET /api/batch/simulate</code>。</p>
-    ${!cleaned ? `<div class="msg info">請先到「資料清洗」頁執行清洗</div>` : `
-    <div class="card">
-      <div class="field" style="max-width:320px;"><label>每回合最大揀貨行數：<span id="batchCapVal">20</span></label>
-        <input type="range" id="batchCapSlider" min="5" max="100" value="20" oninput="onBatchSliderChange()"></div>
-    </div>
-    <div id="batchResult"></div>`}`;
-  if(cleaned) loadBatch();
+// 32MB 請求上限是 Cloud Run 反向代理才有的限制，本機 uvicorn／區網測試（127.0.0.1、localhost）
+// 沒有這個限制，一律走一般上傳即可，不必設定 WAREHOUSE_UPLOAD_BUCKET、也不會消耗雲端額度。
+const DIRECT_UPLOAD_THRESHOLD_BYTES = 28 * 1024 * 1024; // 28MB
+function isLocalBackend(){
+  try{ const h = new URL(API_BASE).hostname; return h==='127.0.0.1' || h==='localhost' || h==='::1'; }
+  catch(e){ return true; } // API_BASE 是空字串／相對路徑（同源）時，視同本機／同一台伺服器，不必直傳
 }
-function onBatchSliderChange(){ document.getElementById('batchCapVal').textContent = document.getElementById('batchCapSlider').value; loadBatch(); }
-async function loadBatch(){
-  const cap = Number((document.getElementById('batchCapSlider')||{}).value || 20);
+
+async function doUpload(f){
+  usingSample = false;
+  document.getElementById('clearDataBtn').disabled = false;
   try{
-    const r = await apiGet('/api/batch/simulate', {capacity:cap});
-    // 情境對照表：固定跑 10/20/30 三種容量，方便對比（回合數改善率）
-    const scen = await Promise.all([10,20,30].map(c=> apiGet('/api/batch/simulate', {capacity:c}).then(x=>({...x, capacity:c})).catch(()=>null)));
-    document.getElementById('batchResult').innerHTML = `
-      <div class="grid grid-3">
-        <div class="card stat-tile"><div class="label">訂單數（逐單揀貨回合數）</div><div class="value">${num(r.single_rounds)}</div></div>
-        <div class="card stat-tile"><div class="label">批次併單後回合數</div><div class="value">${num(r.batch_rounds)}</div>
-          <div class="sub">總揀貨行數 ${num(r.total_lines)}</div></div>
-        <div class="card stat-tile"><div class="label">回合數改善率</div><div class="value ${r.improvement>=10?'ok-text':'bad-text'}">${pct(r.improvement)}</div>
-          <div class="sub">${r.improvement>=10?'✅ 達成 ≥10% 目標':'尚未達 10% 目標'}</div></div>
-      </div>
-      <div class="card"><h3>揀貨回合數比較（容量 ${cap} 行）</h3>
-        ${barChart([{label:'逐單揀貨', value:r.single_rounds, color:'var(--seq-2)'}, {label:'批次併單', value:r.batch_rounds, color:'var(--brand)'}], {w:420})}</div>
-      <div class="card"><h3>批次容量情境對照表</h3>
-        <table class="data-table"><thead><tr><th>批次容量（行）</th><th style="text-align:right;">揀貨回合數</th><th style="text-align:right;">對逐單改善率</th><th>達標（≥10%）</th></tr></thead><tbody>
-        ${scen.filter(Boolean).map(s=>`<tr ${s.capacity===cap?'style="background:color-mix(in srgb, var(--seq-1) 20%, transparent);"':''}>
-          <td>${s.capacity}${s.capacity===cap?'（目前）':''}</td><td style="text-align:right;">${num(s.batch_rounds)}</td>
-          <td style="text-align:right;">${pct(s.improvement)}</td>
-          <td>${s.improvement>=10?'<span class="chip C">達標</span>':'<span class="chip A">未達標</span>'}</td></tr>`).join('')}
-        </tbody></table></div>`;
-  }catch(e){ document.getElementById('batchResult').innerHTML = `<div class="empty">${escHtml(e.message)}</div>`; }
+    if(f.size > DIRECT_UPLOAD_THRESHOLD_BYTES && !isLocalBackend()){
+      await doUploadDirect(f);
+    } else {
+      setImportStatus('上傳中…（檔案較大時，這支請求會等到後端讀完檔案登記完成才回應，可能要一段時間，請耐心等候）');
+      const fd = new FormData(); fd.append('file', f);
+      await apiPost('/api/ingest/upload', {body: fd});
+    }
+    cleaned = false;
+    maxVisitedIdx = Math.max(maxVisitedIdx, 1);
+    pollImportStatus(0);
+  }catch(e){ setImportStatus('匯入失敗：'+e.message, 'bad'); }
+}
+async function doUploadDirect(f){
+  const sizeMb = (f.size/1024/1024).toFixed(1);
+  setImportStatus(`檔案較大（${sizeMb}MB），改用直傳雲端硬碟方式上傳中，請稍候…`);
+  let urlInfo;
+  try{
+    urlInfo = await apiPostJson('/api/ingest/upload_url', {filename: f.name});
+  }catch(e){
+    throw new Error(`無法取得直傳網址：${e.message}（本機開發未設定 WAREHOUSE_UPLOAD_BUCKET 時，`+
+      `${sizeMb}MB 的檔案可直接用一般上傳，只有部署在 Cloud Run 上才有 32MB 限制）`);
+  }
+  const putRes = await fetch(urlInfo.upload_url, {method:'PUT', headers:{'Content-Type': urlInfo.content_type}, body:f});
+  if(!putRes.ok) throw new Error(`直傳雲端硬碟失敗（HTTP ${putRes.status}），請重新整理頁面再試一次`);
+  setImportStatus('已上傳到雲端暫存，通知後端開始解析…');
+  await apiPostJson('/api/ingest/upload_from_gcs', {object_name: urlInfo.object_name, filename: f.name});
+}
+async function pollImportStatus(elapsedSec){
+  elapsedSec = elapsedSec || 0;
+  try{
+    const s = await apiGet('/api/ingest/status');
+    if(s.status === 'processing'){
+      showImportProgress(`背景解析中…已等待 ${elapsedSec} 秒（資料量大時可能需要數分鐘，可切換到其他頁面，等等再回來看）`);
+      setTimeout(()=>pollImportStatus(elapsedSec+2), 2000);
+    } else if(s.status === 'ready'){
+      hideImportProgress();
+      setImportStatus(`匯入成功：${num(s.row_count)} 列`, 'ok');
+      document.getElementById('toCleanBtn').disabled = false;
+      showImportResult(s);
+    } else if(s.status === 'error'){
+      hideImportProgress();
+      setImportStatus('匯入失敗：'+(s.error||''), 'bad');
+    }
+  }catch(e){ hideImportProgress(); setImportStatus('查詢匯入狀態失敗：'+e.message, 'bad'); }
+}
+async function loadSampleData(){
+  setImportStatus('載入中…');
+  try{
+    const r = await apiPost('/api/ingest/sample');
+    usingSample = true; cleaned = false;
+    document.getElementById('clearDataBtn').disabled = false;
+    document.getElementById('toCleanBtn').disabled = false;
+    maxVisitedIdx = Math.max(maxVisitedIdx, 1);
+    setImportStatus(`已載入內建個案範例資料：${num(r.row_count)} 列`, 'ok');
+    showImportResult(r);
+  }catch(e){ setImportStatus('載入失敗：'+e.message, 'bad'); }
+}
+function clearData(){
+  // 後端目前沒有「刪除已上傳資料」的端點（資料落地保存供重啟後續用），這裡只重置本頁畫面顯示；
+  // 要真正換一批資料，直接上傳新檔案／重新載入範例即可（後端會覆蓋舊的原始資料與清洗結果）。
+  usingSample = false; cleaned = false;
+  document.getElementById('clearDataBtn').disabled = true;
+  document.getElementById('toCleanBtn').disabled = true;
+  setImportStatus('尚未匯入資料');
+  document.getElementById('fileMetaBox').innerHTML = kvRows([['檔名','—'],['工作表','—'],['列數','—'],['欄位數','—']]);
+  document.getElementById('mappingCard').style.display = 'none';
+  document.getElementById('schemaChecklist').innerHTML = `<div class="checkrow"><div class="cr-left"><div class="cr-title">尚未匯入資料</div></div></div>`;
+  document.getElementById('previewTable').innerHTML = '';
+}
+function kvRows(pairs){ return pairs.map(([k,v])=>`<div class="kv"><span class="k">${escHtml(k)}</span><span class="v">${escHtml(v)}</span></div>`).join(''); }
+
+async function refreshImportStatus(){
+  initDropzone();
+  try{
+    const s = await apiGet('/api/ingest/status');
+    if(s.status === 'ready'){
+      setImportStatus(`匯入成功：${num(s.row_count)} 列`, 'ok');
+      document.getElementById('toCleanBtn').disabled = false;
+      document.getElementById('clearDataBtn').disabled = false;
+      usingSample = (s.filename === '（內建個案範例資料）');
+      showImportResult(s);
+    } else if(s.status === 'processing'){ pollImportStatus(0); }
+  }catch(e){ /* 後端尚未啟動：維持「尚未匯入資料」畫面即可 */ }
+}
+function showImportResult(r){
+  document.getElementById('fileMetaBox').innerHTML = kvRows([
+    ['檔名', r.filename || '—'], ['工作表', '訂單資料（自動偵測，找不到則用第一個工作表）'],
+    ['列數', num(r.row_count)], ['欄位數', r.columns ? r.columns.length : '—'],
+  ]);
+  // 欄位對應：後端固定以「訂單資料」18 欄結構解析，不支援瀏覽器端手動改對應，故此卡片維持原型
+  // 預設的隱藏狀態（原型也是「偵測到才顯示」，這裡改成固定不需要顯示）。
+  document.getElementById('mappingCard').style.display = 'none';
+
+  const missing = r.missing_required_columns || [];
+  const cl = document.getElementById('schemaChecklist');
+  if(missing.length){
+    cl.innerHTML = `<div class="checkrow"><div class="cr-left"><span class="chip warn"><span class="dot"></span>缺少必要欄位</span>
+      <div><div class="cr-title">缺少 ${missing.length} 個必要欄位</div><div class="cr-sub">${escHtml(missing.join('、'))}</div></div></div></div>`;
+  } else {
+    cl.innerHTML = `<div class="checkrow"><div class="cr-left"><span class="chip ok"><span class="dot"></span>通過</span>
+      <div><div class="cr-title">必要欄位均已找到</div><div class="cr-sub">欄位對照由後端 /api/ingest/status 檢查</div></div></div></div>`;
+  }
+
+  const cols = r.columns || [];
+  const rows = r.preview_rows || [];
+  document.getElementById('previewSub').textContent = `共 ${cols.length} 欄，顯示前 ${Math.min(10,rows.length)} 列`;
+  document.getElementById('previewTable').innerHTML =
+    `<thead><tr>${cols.map(c=>`<th>${escHtml(c)}</th>`).join('')}</tr></thead>
+     <tbody>${rows.slice(0,10).map(row=>`<tr>${row.map(v=>`<td>${escHtml(v)}</td>`).join('')}</tr>`).join('')}</tbody>`;
 }
 
-// ================= KPI 儀表板 =================
-function renderKpi(el){
-  el.innerHTML = `
-    <h2>KPI 儀表板</h2>
-    <p class="subtitle">對應後端 <code>GET /api/kpi/compute</code>（整合批次併單＋儲位配置改善結果）。</p>
-    ${!cleaned ? `<div class="msg info">請先到「資料清洗」頁執行清洗</div>` : `
-    <div class="card">
-      <div class="row">
-        <div class="field"><label>作業模式</label>
-          <select id="kpiMode" onchange="loadKpi()"><option value="manual">人工</option><option value="agv">AGV／AMR</option></select></div>
-        <div class="field"><label>人員／設備數量</label><input type="number" id="kpiUnit" value="3" min="1" onchange="loadKpi()"></div>
-        <div class="field"><label>移動速度（m/s）</label><input type="number" id="kpiSpeed" value="1.0" step="0.1" min="0.1" onchange="loadKpi()"></div>
-        <div class="field"><label>單件取放秒數</label><input type="number" id="kpiHandle" value="12" min="0" onchange="loadKpi()"></div>
-        <div class="field"><label>批次併單容量</label><input type="number" id="kpiCap" value="20" min="1" onchange="loadKpi()"></div>
-      </div>
-    </div>
-    <div id="kpiResult"></div>
-    <div class="card">
-      <h3>資料來源、模型假設與計算方式</h3>
-      <ul class="card-sub" style="line-height:1.9; padding-left:18px; margin:0;">
-        <li><b>資料來源</b>：以上傳／範例的門市出貨訂單清洗後結果為基礎，所有數據由後端 <code>/api/kpi/compute</code> 即時計算。</li>
-        <li><b>移動距離</b>：以各儲位「沿走道經出貨口的曼哈頓距離」為基準；改善前＝未規劃時全區平均距離，改善後＝依 ABC 熱度把最近儲位分給高出貨類別後的「出貨次數加權平均距離」。</li>
-        <li><b>揀貨回合數</b>：逐單揀貨＝訂單數；批次併單＝ ⌈總揀貨行數 ÷ 每回合容量⌉。</li>
-        <li><b>揀貨工時</b>：(移動工時＋取放工時) ÷ 人員/設備數；移動工時＝距離×2×回合數 ÷ 移動速度，取放工時＝平均行數×單件取放秒數×回合數。AGV／AMR 模式將等效速度乘以 1.35 作敏感度比較。</li>
-        <li><b>KPI 目標</b>（專案章程）：移動距離改善率 ≥ 10%、揀貨回合數改善率 ≥ 10%、總揀貨工時改善率 ≥ 5%。</li>
-        <li><b>限制</b>：距離為依走道動線之估算值、非精確 CAD；工時採固定取放秒數假設。分析結果供決策參考，實際導入仍需現場複核。</li>
-      </ul>
-    </div>`}`;
-  if(cleaned) loadKpi();
+/* ---------------- 2. 資料清洗（自原型 runCleaningPipeline／renderCleanResults 移植；
+   規則本身在後端 P零售物流data_清洗腳本.py 邏輯執行，前端只顯示 /api/clean/* 回傳的統計） ---------------- */
+async function renderCleanScreen(){
+  const status = document.getElementById('cleanRunStatus');
+  try{
+    const s = await apiGet('/api/ingest/status');
+    if(s.status !== 'ready'){
+      status.innerHTML = `<div class="card">${emptyState('請先於「資料匯入」頁面匯入資料（或載入個案範例資料）')}</div>`;
+      ['cleanStatTiles','ruleHitList','reclassSummary','materialSummary','addressSummary'].forEach(id=>{ const el=document.getElementById(id); if(el) el.innerHTML=''; });
+      return;
+    }
+  }catch(e){
+    status.innerHTML = `<div class="card">${emptyState('無法連線到後端，請確認後端網址與伺服器狀態')}</div>`;
+    return;
+  }
+  status.innerHTML = '';
+  if(!cleaned){
+    document.getElementById('cleanStatTiles').innerHTML = `<div class="loading-overlay"><div class="spinner"></div><div>清洗中…（資料量大時可能需要數秒到數十秒）</div></div>`;
+    try{
+      const s = await apiPost('/api/clean/run');
+      cleaned = true;
+      maxVisitedIdx = Math.max(maxVisitedIdx, 2);
+      renderCleanSummary(s);
+    }catch(e){ document.getElementById('cleanStatTiles').innerHTML = `<div class="card">${emptyState('清洗失敗：'+e.message)}</div>`; return; }
+  } else {
+    try{ const s = await apiGet('/api/clean/summary'); renderCleanSummary(s); }
+    catch(e){ document.getElementById('cleanStatTiles').innerHTML = `<div class="card">${emptyState(e.message)}</div>`; return; }
+  }
+  loadCleanPreviewDataset('clean', 'cleanPreviewTable', 'cleanPreviewSub', 10);
+  loadCleanPreviewDataset('sku_dim', 'skuDimTable', 'skuDimSub', 20);
+  loadCleanPreviewDataset('iso', 'isoPreviewTable', 'isoPreviewSub', 20);
+  loadCleanPreviewDataset('change_log', 'changeLogTable', 'changeLogSub', 20);
+  loadCategoryTable();
 }
-async function loadKpi(){
-  const mode = (document.getElementById('kpiMode')||{}).value || 'manual';
-  const unit = Number((document.getElementById('kpiUnit')||{}).value || 3);
+
+function countRows(obj, label){
+  const entries = Object.entries(obj||{}).sort((a,b)=>b[1]-a[1]);
+  if(!entries.length) return emptyState('（無）');
+  const total = entries.reduce((s,[,v])=>s+v,0) || 1;
+  return entries.map(([k,v],i)=>`<div class="rule-row">
+    <div class="rule-num">${i+1}</div>
+    <div><div class="rule-title">${escHtml(k)}</div><div class="rule-sub">佔${escHtml(label)} ${(v/total*100).toFixed(1)}%</div></div>
+    <div class="rule-count">${num(v)}</div></div>`).join('');
+}
+
+function renderCleanSummary(s){
+  const st = s.stats;
+  document.getElementById('cleanStatTiles').innerHTML = `
+    <div class="card stat-tile"><div class="label">原始列數</div><div class="value">${num(st.original_row_count)}</div></div>
+    <div class="card stat-tile"><div class="label">乾淨資料</div><div class="value" style="color:var(--success-text);">${num(st.clean_count)}</div>
+      <div class="delta ${st.row_check_ok?'good':'bad'}">${st.row_check_ok?'✅ 列數勾稽一致':'⚠ 列數不一致'}</div></div>
+    <div class="card stat-tile"><div class="label">隔離資料</div><div class="value">${num(st.iso_count)}</div><div class="delta">待人工複核／確認</div></div>
+    <div class="card stat-tile"><div class="label">商品材積主檔</div><div class="value">${num(st.sku_count)}</div><div class="delta">個商品ID</div></div>`;
+
+  document.getElementById('ruleHitList').innerHTML = countRows(s.iso_reason_counts, '隔離資料');
+
+  const addrPending = st.address_pending_confirm ?? s.address_pending_confirm ?? 0;
+  document.getElementById('reclassSummary').innerHTML = `
+    <div class="kv"><span class="k">隔離資料筆數</span><span class="v">${num(st.iso_count)}</span></div>
+    <div class="kv"><span class="k">逐筆變更紀錄</span><span class="v">${num(s.change_log_count)}</span></div>
+    <p class="section-note">隔離規則命中統計見左側；規則5（類別缺值）關鍵字重分類後移回乾淨資料者，
+    已反映在「原始列數」與「乾淨資料」的差額中，明細請見下方「隔離資料明細」與「逐筆變更紀錄」表。</p>`;
+
+  document.getElementById('materialSummary').innerHTML =
+    `<p class="card-sub" style="margin:0 0 8px;">材積來源分布</p>${countRows(s.material_source_counts, '商品')}
+     <p class="card-sub" style="margin:12px 0 8px;">儲位分類（貨架／棧板）</p>${countRows(s.storage_class_counts, '商品')}`;
+
+  document.getElementById('addressSummary').innerHTML =
+    `<div class="kv"><span class="k">配送地址待確認</span><span class="v">${num(addrPending)} 筆</span></div>
+     <p class="section-note">查無可信版本、無法自動補齊縣市／行政區的訂單，標記為待確認，仍併入分析但建議人工複核。</p>`;
+}
+
+async function loadCleanPreviewDataset(dataset, tableId, subId, limit){
+  const table = document.getElementById(tableId), sub = document.getElementById(subId);
+  if(!table) return;
+  table.innerHTML = `<tbody><tr><td>${emptyState('載入中…')}</td></tr></tbody>`;
+  try{
+    const r = await apiGet('/api/clean/preview', {dataset, limit, offset:0});
+    if(sub) sub.textContent = `共 ${num(r.total_rows)} 列、${r.columns.length} 欄，顯示前 ${Math.min(limit, r.rows.length)} 列`;
+    if(!r.rows.length){ table.innerHTML = `<tbody><tr><td>${emptyState('（此資料集目前無資料）')}</td></tr></tbody>`; return; }
+    table.innerHTML = `<thead><tr>${r.columns.map(c=>`<th>${escHtml(c)}</th>`).join('')}</tr></thead>
+      <tbody>${r.rows.map(row=>`<tr>${row.map(v=>`<td>${escHtml(v)}</td>`).join('')}</tr>`).join('')}</tbody>`;
+  }catch(e){ table.innerHTML = `<tbody><tr><td>${emptyState(e.message)}</td></tr></tbody>`; if(sub) sub.textContent=''; }
+}
+
+// 69 碼商品類別對照表：後端沒有獨立端點回傳完整固定表，這裡改用「商品類別 ABC 分級」
+// （/api/abc/category，僅含實際有出貨紀錄的類別）列出目前資料集用得到的類別代碼／名稱，
+// 並非原型的完整 69 碼靜態表，故標題另加註說明；資料仍完全來自後端，不在前端做任何分類邏輯。
+async function loadCategoryTable(){
+  const box = document.getElementById('categoryTableView'); if(!box) return;
+  try{
+    const r = await apiGet('/api/abc/category', {a_thresh:70, b_thresh:90});
+    if(!r.categories.length){ box.innerHTML = `<tbody><tr><td>${emptyState('（清洗後無出貨資料）')}</td></tr></tbody>`; return; }
+    box.innerHTML = `<thead><tr><th>商品類別</th><th style="text-align:right;">SKU數</th></tr></thead>
+      <tbody>${r.categories.map(c=>`<tr><td>${escHtml(c.name)}</td><td style="text-align:right;">${c.sku_count}</td></tr>`).join('')}</tbody>`;
+  }catch(e){ box.innerHTML = `<tbody><tr><td>${emptyState(e.message)}</td></tr></tbody>`; }
+}
+
+/* ---------------- 3. 需求預測（自原型 renderForecastScreen 移植；預測模型全部在後端跑） ---------------- */
+let CAT_NAME_CACHE = {};   // catId -> 類別名稱，由 /api/abc/category 回應順便填入，供各頁顯示用（非分級邏輯）
+function catName(id){ return CAT_NAME_CACHE[id] || ('類別#'+id); }
+
+let fcTarget = 'qty';      // 'qty'=預測出貨量 / 'cnt'=預測揀貨次數（比照原型 tabbar 與 subtabbar 同步）
+let fcSkuFilter = null;
+let fcSkuTopCache = null;  // 供商品ID輸入框 datalist 建議清單使用
+
+function onForecastTargetChange(t){
+  fcTarget = t;
+  document.querySelectorAll('#screen-forecast .tabbar .tabbtn[data-tgt]').forEach(b=>b.classList.toggle('active', b.dataset.tgt===t));
+  document.querySelectorAll('#screen-forecast .subtabbar .subtabbtn[data-fctm]').forEach(b=>b.classList.toggle('active', b.dataset.fctm===t));
+  loadForecastTrend();
+}
+function setFcTrendMetric(m){ onForecastTargetChange(m); }
+function onFcQueryInput(){ /* 僅靠瀏覽器原生 <datalist> 提供建議，不做額外邏輯 */ }
+function doForecastQuery(){
+  const v = document.getElementById('fcQueryInput').value.trim();
+  const m = v.match(/^\d+/);
+  fcSkuFilter = m ? Number(m[0]) : null;
+  loadForecastTrend();
+}
+function clearForecastQuery(){ document.getElementById('fcQueryInput').value=''; fcSkuFilter=null; loadForecastTrend(); }
+
+async function renderForecastScreen(){
+  document.getElementById('sampleWarnForecast').innerHTML = sampleBanner();
+  if(!cleaned){ document.getElementById('forecastStatTiles').innerHTML = `<div class="card">${emptyState('請先於「資料清洗」頁面完成清洗')}</div>`; return; }
+  await loadForecastTrend();
+  loadForecastBreakdown();
+  loadForecastSkuTop();
+  onLifecycleWindowChange();
+}
+async function loadForecastTrend(){
+  const chartEl = document.getElementById('forecastTrendChart'), sub = document.getElementById('forecastTrendSub');
+  try{
+    const s = await apiGet('/api/forecast/series', {granularity:'month', target:fcTarget, sku_id:fcSkuFilter});
+    document.getElementById('forecastPeriodCount').textContent = s.periods.length + ' 期（月）';
+    document.getElementById('forecastStatTiles').innerHTML = `
+      <div class="card stat-tile"><div class="label">選用模型</div><div class="value" style="font-size:20px;">${escHtml(s.model)}</div></div>
+      <div class="card stat-tile"><div class="label">MASE</div><div class="value">${s.mase!=null?s.mase.toFixed(2):'—'}</div><div class="delta">&lt;1 優於 Naive 基準</div></div>
+      <div class="card stat-tile"><div class="label">誤差%（WAPE）</div><div class="value">${pct(s.wape)}</div></div>
+      <div class="card stat-tile"><div class="label">歷史可用期數</div><div class="value">${s.periods.length}</div></div>`;
+    sub.textContent = (fcSkuFilter? `商品ID ${fcSkuFilter}　｜　` : '全資料集加總　｜　') + `虛線為最後一季預測延伸`;
+    chartEl.innerHTML = lineChart(s.periods, s.actual, s.test_len, s.pred_tail);
+  }catch(e){ chartEl.innerHTML = emptyState(e.message); sub.textContent=''; }
+}
+async function loadForecastBreakdown(){
+  const box = document.getElementById('forecastCatTable');
+  try{
+    if(!Object.keys(CAT_NAME_CACHE).length){ try{ const c = await apiGet('/api/abc/category',{a_thresh:70,b_thresh:90}); c.categories.forEach(x=>CAT_NAME_CACHE[x.cat]=x.name); }catch(e){} }
+    const b = await apiGet('/api/forecast/breakdown', {granularity:'month', target:fcTarget});
+    box.innerHTML = `<thead><tr><th>商品類別</th><th style="text-align:right;">測試期實際</th><th style="text-align:right;">測試期預測</th>
+      <th style="text-align:right;">誤差%</th><th style="text-align:right;">MASE</th><th>選用模型</th></tr></thead><tbody>
+      ${b.rows.map(r=>`<tr><td>${escHtml(r.name)}</td><td style="text-align:right;">${num(r.actual_sum)}</td>
+        <td style="text-align:right;">${num(r.pred_sum)}</td><td style="text-align:right;">${pct(r.wape)}</td>
+        <td style="text-align:right;">${r.mase!=null?r.mase.toFixed(2):'—'}</td><td>${escHtml(r.model)}</td></tr>`).join('')}</tbody>`;
+  }catch(e){ box.innerHTML = `<tbody><tr><td>${emptyState(e.message)}</td></tr></tbody>`; }
+}
+async function loadForecastSkuTop(){
+  const sub = document.getElementById('forecastSkuSub'), box = document.getElementById('forecastSkuTable');
+  try{
+    const st = await apiGet('/api/forecast/sku_top', {granularity:'month', target:fcTarget, candidate_n:200, top_n:20});
+    fcSkuTopCache = st.rows;
+    const dl = document.getElementById('fcSkuDatalist');
+    if(dl) dl.innerHTML = st.rows.map(r=>`<option value="${r.id}">${escHtml(r.name||'')}</option>`).join('');
+    sub.textContent = `取歷史${fcTarget==='cnt'?'訂單次數':'出貨量'}前 ${st.candidate_count} 名 SKU（共 ${num(st.total_sku_count)} 個有效 SKU），顯示最後一季預測 vs 實際。`;
+    box.innerHTML = !st.rows.length ? `<tbody><tr><td>${emptyState('無資料')}</td></tr></tbody>` :
+      `<thead><tr><th>#</th><th>商品ID</th><th>商品名稱</th><th>類別</th>
+        <th style="text-align:right;">測試期實際</th><th style="text-align:right;">測試期預測</th>
+        <th style="text-align:right;">誤差%</th><th style="text-align:right;">總量誤差%</th><th>選用模型</th></tr></thead><tbody>
+      ${st.rows.map((r,i)=>`<tr><td>${i+1}</td><td>${r.id}</td><td>${escHtml(r.name)}</td><td>${escHtml(r.cat_name)}</td>
+        <td style="text-align:right;">${num(r.actual_sum)}</td><td style="text-align:right;">${num(r.pred_sum)}</td>
+        <td style="text-align:right;">${pct(r.wape)}</td><td style="text-align:right;">${r.tot_err!=null?pct(r.tot_err):'—'}</td><td>${escHtml(r.model)}</td></tr>`).join('')}</tbody>`;
+  }catch(e){ box.innerHTML = `<tbody><tr><td>${emptyState(e.message)}</td></tr></tbody>`; sub.textContent=''; }
+}
+function onLifecycleWindowChange(){
+  const n = Number((document.getElementById('lifecycleWindow')||{}).value || 6);
+  loadLifecycle(n);
+}
+async function loadLifecycle(recentN){
+  const tiles = document.getElementById('lifecycleTiles'), box = document.getElementById('lifecycleTable');
+  try{
+    const lc = await apiGet('/api/forecast/lifecycle', {granularity:'month', recent_n:recentN});
+    tiles.innerHTML = `
+      <div class="card stat-tile"><div class="label">新品</div><div class="value" style="color:var(--success-text);">${lc.counts['新品']}</div><div class="delta">首次出貨在最近 ${recentN} 期</div></div>
+      <div class="card stat-tile"><div class="label">正常／持續</div><div class="value">${lc.counts['正常']}</div><div class="delta">共 ${num(lc.rows.length)} 個有效 SKU</div></div>
+      <div class="card stat-tile"><div class="label">滯銷／沉睡</div><div class="value" style="color:var(--critical);">${lc.counts['滯銷']}</div><div class="delta">最近 ${recentN} 期無出貨</div></div>`;
+    const preview = lc.rows.filter(r=>r.cls!=='正常').sort((a,b)=> a.cls===b.cls?0:(a.cls==='新品'?-1:1)).slice(0,50);
+    box.innerHTML = !preview.length ? `<tbody><tr><td>${emptyState('目前視窗下沒有新品或滯銷 SKU')}</td></tr></tbody>` :
+      `<thead><tr><th>分類</th><th>商品ID</th><th>商品名稱</th><th>類別</th>
+        <th>首次出貨</th><th>最近出貨</th><th style="text-align:right;">有量期數</th><th style="text-align:right;">沉睡期數</th></tr></thead><tbody>
+      ${preview.map(r=>`<tr><td>${r.cls==='新品'?'<span class="chip ok">新品</span>':'<span class="chip bad">滯銷</span>'}</td><td>${r.sku}</td><td>${escHtml(r.name)}</td><td>${escHtml(catName(r.cat))}</td>
+        <td>${escHtml(r.first)}</td><td>${escHtml(r.last)}</td><td style="text-align:right;">${r.nz}</td><td style="text-align:right;">${r.dorm_months}</td></tr>`).join('')}</tbody>`;
+  }catch(e){ box.innerHTML = `<tbody><tr><td>${emptyState(e.message)}</td></tr></tbody>`; }
+}
+function downloadLifecycleCSV(){
+  // 沿用後端 /api/clean/export（清洗結果 xlsx）供覆核；生命週期清單本身沒有獨立的下載端點，
+  // 原型是前端自己組 CSV 字串，這裡改為直接連到後端清洗結果下載，避免在前端重新組資料。
+  window.open(API_BASE + '/api/clean/export', '_blank');
+}
+
+/* ---------------- 4. 儲位配置（ABC熱度分級／共同揀取關係／儲位配置與商品查詢，自原型移植）
+   全部改用「預測式」ABC（/api/abc/predicted_category、/api/abc/predicted_sku）與精細版
+   儲位配置（/api/storage/wh_assignment），對應原型此版畫面已改用預測值分級（見專案移植記錄）。 ---------------- */
+let abcParams = {a:80, b:95};
+let PRED_SKU_CACHE = null;      // /api/abc/predicted_sku 結果（供 Pareto 與商品查詢 datalist 共用）
+let WH_ASSIGN_BASE = null;      // /api/storage/wh_assignment（不帶 sku_id）的基礎結果，供兩張倉儲圖使用
+
+function switchTab(name){
+  document.querySelectorAll('#screen-abc .tabbar .tabbtn').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
+  document.getElementById('tab-abc').style.display = name==='abc' ? 'block':'none';
+  document.getElementById('tab-copick').style.display = name==='copick' ? 'block':'none';
+  document.getElementById('tab-storage').style.display = name==='storage' ? 'block':'none';
+  if(name==='copick' && !CAT_COPICK_LOADED) loadCopickTab();
+  if(name==='storage' && !WH_ASSIGN_BASE) renderQueryScreen();
+}
+function onAbcSliderChange(){
+  abcParams.a = Number(document.getElementById('abcASlider').value);
+  abcParams.b = Number(document.getElementById('abcBSlider').value);
+  document.getElementById('abcAVal').textContent = abcParams.a+'%';
+  document.getElementById('abcBVal').textContent = abcParams.b+'%';
+  WH_ASSIGN_BASE = null;
+  loadAbcTab();
+  if(document.getElementById('tab-copick').style.display !== 'none') loadCopickTab();
+  if(document.getElementById('tab-storage').style.display !== 'none') renderQueryScreen();
+}
+async function renderAbcScreen(){
+  if(!cleaned){
+    ['skuParetoShelf','skuParetoPallet'].forEach(id=>{ const el=document.getElementById(id); if(el) el.innerHTML = emptyState('請先於「資料清洗」頁面完成清洗'); });
+    return;
+  }
+  CAT_COPICK_LOADED = false; WH_ASSIGN_BASE = null;
+  switchTab('abc');
+  loadAbcTab();
+}
+
+async function loadAbcTab(){
+  try{
+    const r = await apiGet('/api/abc/predicted_sku', {a_thresh:abcParams.a, b_thresh:abcParams.b, top_n:200});
+    PRED_SKU_CACHE = r;
+    // Pareto 曲線改用後端 pareto_shelf／pareto_pallet（對「全部」SKU 取樣，見 /api/abc/predicted_sku
+    // 的 _pareto() 說明），不再用 top_n=200 截斷後的清單自己湊點，曲線才會畫到 100%。
+    document.getElementById('skuParetoShelf').innerHTML = paretoCurve(r.pareto_shelf, abcParams.a, abcParams.b);
+    document.getElementById('skuParetoPallet').innerHTML = paretoCurve(r.pareto_pallet, abcParams.a, abcParams.b);
+    document.getElementById('abcShelfSub').textContent = `共 ${num(r.shelf_total)} 個貨架區 SKU，依預測揀貨次數排序，顯示前 15`;
+    document.getElementById('abcPalletSub').textContent = `共 ${num(r.pallet_total)} 個棧板區 SKU，依預測出貨量排序，顯示前 15`;
+    document.getElementById('abcShelfTable').innerHTML = skuAbcRows(r.shelf.slice(0,15), '預測揀貨次數');
+    document.getElementById('abcPalletTable').innerHTML = skuAbcRows(r.pallet.slice(0,15), '預測出貨量');
+  }catch(e){
+    ['skuParetoShelf','skuParetoPallet'].forEach(id=>document.getElementById(id).innerHTML = emptyState(e.message));
+    ['abcShelfTable','abcPalletTable'].forEach(id=>document.getElementById(id).innerHTML = `<tbody><tr><td>${emptyState(e.message)}</td></tr></tbody>`);
+  }
+  try{
+    const c = await apiGet('/api/abc/predicted_category', {a_thresh:abcParams.a, b_thresh:abcParams.b});
+    c.shelf.forEach(x=>CAT_NAME_CACHE[x.cat]=x.name); c.pallet.forEach(x=>CAT_NAME_CACHE[x.cat]=x.name);
+    document.getElementById('predAbcShelfTable').innerHTML = catAbcRows(c.shelf, '預測揀貨次數');
+    document.getElementById('predAbcPalletTable').innerHTML = catAbcRows(c.pallet, '預測出貨量');
+  }catch(e){
+    ['predAbcShelfTable','predAbcPalletTable'].forEach(id=>document.getElementById(id).innerHTML = `<tbody><tr><td>${emptyState(e.message)}</td></tr></tbody>`);
+  }
+}
+function skuAbcRows(items, metricLabel){
+  if(!items.length) return `<tbody><tr><td>${emptyState('無資料')}</td></tr></tbody>`;
+  return `<thead><tr><th>#</th><th>商品ID</th><th>名稱</th><th>類別</th><th style="text-align:right;">${metricLabel}</th>
+    <th style="text-align:right;">佔比</th><th style="text-align:right;">累計%</th><th>級</th></tr></thead><tbody>
+    ${items.map((it,i)=>`<tr><td>${i+1}</td><td>${it.id}</td><td>${escHtml(it.name)}</td><td>${escHtml(catName(it.cat))}</td>
+      <td style="text-align:right;">${num(it.freq)}</td><td style="text-align:right;">${pct(it.share)}</td>
+      <td style="text-align:right;">${pct(it.cum)}</td><td>${clsChipHtml(it.cls)}</td></tr>`).join('')}</tbody>`;
+}
+function catAbcRows(items, metricLabel){
+  if(!items.length) return `<tbody><tr><td>${emptyState('無資料')}</td></tr></tbody>`;
+  return `<thead><tr><th>#</th><th>商品類別</th><th style="text-align:right;">${metricLabel}</th>
+    <th style="text-align:right;">佔比</th><th style="text-align:right;">累計%</th><th>級</th></tr></thead><tbody>
+    ${items.map((it,i)=>`<tr><td>${i+1}</td><td>${escHtml(it.name)}</td><td style="text-align:right;">${num(it.metric)}</td>
+      <td style="text-align:right;">${pct(it.share)}</td><td style="text-align:right;">${pct(it.cum)}</td><td>${clsChipHtml(it.cls)}</td></tr>`).join('')}</tbody>`;
+}
+
+/* ---- 共同揀取關係分頁 ---- */
+let CAT_COPICK_LOADED = false;
+async function loadCopickTab(){
+  CAT_COPICK_LOADED = true;
+  const adjBox = document.getElementById('adjTable');
+  try{
+    const r = await apiGet('/api/copick/sku', {sort:'lift', limit:30});
+    document.getElementById('adjSub').textContent = `門檻：共同出貨次數 ≥ ${r.count_thresh}（Lift 版另需達 ${r.lift_count_thresh} 次），共 ${num(r.total_pairs)} 組合中取前 30`;
+    adjBox.innerHTML = !r.pairs.length ? `<tbody><tr><td>${emptyState('目前資料量下無達門檻的共同揀取組合')}</td></tr></tbody>` :
+      `<thead><tr><th>商品A</th><th>商品B</th><th style="text-align:right;">共同次數</th><th style="text-align:right;">Support%</th><th style="text-align:right;">Lift</th></tr></thead><tbody>
+      ${r.pairs.map(p=>`<tr><td>${escHtml(p.a.name)}</td><td>${escHtml(p.b.name)}</td>
+        <td style="text-align:right;">${num(p.count)}</td><td style="text-align:right;">${p.support.toFixed(2)}%</td>
+        <td style="text-align:right;">${p.lift.toFixed(2)}</td></tr>`).join('')}</tbody>`;
+  }catch(e){ adjBox.innerHTML = `<tbody><tr><td>${emptyState(e.message)}</td></tr></tbody>`; }
+
+  const catBox = document.getElementById('catPairTable');
+  try{
+    const cp = await apiGet('/api/copick/category', {cap_n:20});
+    cp.labels.forEach((lab,i)=>{ /* 標籤已是類別名稱，不需另外查名稱 */ });
+    const pairs = [];
+    for(let i=0;i<cp.labels.length;i++) for(let j=i+1;j<cp.labels.length;j++){
+      pairs.push({a:cp.labels[i], b:cp.labels[j], count:cp.matrix[i][j], lift:cp.lift_matrix[i][j]});
+    }
+    pairs.sort((x,y)=> y.lift-x.lift);
+    const top = pairs.slice(0,30);
+    document.getElementById('catPairSub').textContent = `出貨次數前 ${cp.labels.length} 名類別的兩兩組合，依 Lift 由高到低取前 30`;
+    catBox.innerHTML = !top.length ? `<tbody><tr><td>${emptyState('資料量不足以計算類別共同揀取關係')}</td></tr></tbody>` :
+      `<thead><tr><th>類別A</th><th>類別B</th><th style="text-align:right;">共同出貨次數</th><th style="text-align:right;">Lift</th></tr></thead><tbody>
+      ${top.map(p=>`<tr><td>${escHtml(p.a)}</td><td>${escHtml(p.b)}</td><td style="text-align:right;">${num(p.count)}</td><td style="text-align:right;">${p.lift.toFixed(2)}</td></tr>`).join('')}</tbody>`;
+  }catch(e){ catBox.innerHTML = `<tbody><tr><td>${emptyState(e.message)}</td></tr></tbody>`; }
+}
+
+/* ---- 儲位配置與商品查詢分頁 ---- */
+async function renderQueryScreen(){
+  document.getElementById('sampleWarnQuery').innerHTML = sampleBanner();
+  try{
+    const r = await apiGet('/api/storage/wh_assignment', {a_thresh:abcParams.a, b_thresh:abcParams.b});
+    WH_ASSIGN_BASE = r;
+    renderWhDiagram('whBeforeMap', 'before', {zoneBeforeCats:r.zone_before_cats}, null);
+    renderWhDiagram('whAfterMap', 'after', {afterProp:r.after_prop, zoneAfterClass:r.zone_after_class}, null);
+    const dl = document.getElementById('skuDatalist');
+    if(dl && PRED_SKU_CACHE){ dl.innerHTML = PRED_SKU_CACHE.shelf.concat(PRED_SKU_CACHE.pallet).slice(0,300).map(it=>`<option value="${it.id}">${escHtml(it.name||'')}</option>`).join(''); }
+  }catch(e){
+    document.getElementById('whBeforeMap').innerHTML = emptyState(e.message);
+    document.getElementById('whAfterMap').innerHTML = emptyState(e.message);
+  }
+}
+function onQueryInput(){ /* 僅靠瀏覽器原生 <datalist> 提供建議 */ }
+async function doProductQuery(){
+  const v = document.getElementById('queryInput').value.trim();
+  const m = v.match(/^\d+/);
+  const box = document.getElementById('queryResult');
+  if(!m){ box.innerHTML = `<div class="chip bad">請輸入有效的商品ID</div>`; return; }
+  const skuId = Number(m[0]);
+  box.innerHTML = emptyState('查詢中…');
+  try{
+    const r = await apiGet('/api/storage/wh_assignment', {a_thresh:abcParams.a, b_thresh:abcParams.b, sku_id:skuId});
+    const cls = r.predicted_cls || r.info.cls;
+    const beforeZone = (WH_ASSIGN_BASE && WH_ASSIGN_BASE.before_cat_zone[r.info.cat]) || null;
+    box.innerHTML = `<div class="grid grid-4">
+      <div class="kv"><span class="k">商品ID</span><span class="v">${r.sku_id}</span></div>
+      <div class="kv"><span class="k">商品名稱</span><span class="v">${escHtml(r.info.name||'—')}</span></div>
+      <div class="kv"><span class="k">預測熱度等級</span><span class="v">${clsChipHtml(cls)}</span></div>
+      <div class="kv"><span class="k">改善後分區</span><span class="v">${escHtml(r.zone||'—')}</span></div>
+    </div>`;
+    // 後端 zones_config.json 已跟這份幾何檔用同一套分區代號，r.zone／before_cat_zone 可以直接
+    // 拿來當 highlightCode，精準標出單一分區（比照原型：改善前標整區，改善後只標區內同等級格子）。
+    renderWhDiagram('whBeforeMap', 'before', {zoneBeforeCats:WH_ASSIGN_BASE?WH_ASSIGN_BASE.zone_before_cats:{}}, beforeZone);
+    renderWhDiagram('whAfterMap', 'after', {afterProp:WH_ASSIGN_BASE?WH_ASSIGN_BASE.after_prop:null, zoneAfterClass:WH_ASSIGN_BASE?WH_ASSIGN_BASE.zone_after_class:{}}, r.zone, cls);
+  }catch(e){ box.innerHTML = `<div class="chip bad">${escHtml(e.message)}</div>`; }
+}
+
+/* ---------------- 5. 揀貨策略（地理分群＋播種式批次，自原型 renderBatchScreen 移植；
+   分波、回合切分、移動距離全部由後端 /api/batch/* 算好，前端只負責畫表／畫圖） ---------------- */
+function onBatchSliderChange(){
+  document.getElementById('batchCapVal').textContent = document.getElementById('batchCapSlider').value + ' SKU';
+  document.getElementById('batchCapEcho').textContent = document.getElementById('batchCapSlider').value;
+  loadBatchStrategies();
+}
+function onBatchNChange(){
+  document.getElementById('batchNVal').textContent = document.getElementById('batchNSlider').value;
+  loadBatchStrategies();
+}
+async function renderBatchScreen(){
+  document.getElementById('sampleWarnBatch').innerHTML = sampleBanner();
+  if(!cleaned){
+    ['batchChart','batchCompareTable','batchScenarioTable','batchGeoTable'].forEach(id=>{ const el=document.getElementById(id); if(el) el.innerHTML = emptyState('請先於「資料清洗」頁面完成清洗'); });
+    return;
+  }
+  loadBatchStrategies();
+  loadBatchDates();
+}
+function batchParams(){
+  return {
+    capacity: Number((document.getElementById('batchCapSlider')||{}).value || 20),
+    threshold_n: Number((document.getElementById('batchNSlider')||{}).value || 5),
+    a_thresh: abcParams.a, b_thresh: abcParams.b,
+  };
+}
+async function loadBatchStrategies(){
+  const p = batchParams();
+  let r;
+  try{
+    r = await apiGet('/api/batch/strategies', p);
+  }catch(e){
+    // 之前這裡只清空圖表／表格，上方 KV 統計格保持預設「—」不變，導致畫面看起來像是
+    // 「沒有任何東西載入」而看不出真正的錯誤訊息；改成把錯誤同時顯示在 KV 格與圖表兩處。
+    ['batchOrderCount','batchLineCount','batchAvgLines','batchGroupCount','batchSkuMedian','batchBind','batchWindow']
+      .forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent = '錯誤'; });
+    ['batchChart','batchCompareTable','batchGeoTable','batchScenarioTable'].forEach(id=>{
+      const el=document.getElementById(id); if(el) el.innerHTML = emptyState('讀取揀貨策略失敗：'+e.message);
+    });
+    return;
+  }
+  document.getElementById('batchOrderCount').textContent = num(r.total_orders);
+  document.getElementById('batchLineCount').textContent = num(r.total_lines);
+  document.getElementById('batchAvgLines').textContent = r.total_orders? (r.total_lines/r.total_orders).toFixed(1) : '—';
+  document.getElementById('batchGroupCount').textContent = num(r.groups);
+  document.getElementById('batchSkuMedian').textContent = r.sku_median;
+  document.getElementById('batchBind').textContent = `${r.bind_groups} 群（${pct(r.bind_ratio)}）`;
+  document.getElementById('batchWindow').textContent = r.window_label;
+
+  document.getElementById('batchChart').innerHTML = barChart([
+    {label:'逐單揀貨', value:r.single.rounds, color:'var(--seq-2)'},
+    {label:'播種式批次', value:r.seed.rounds, color:'var(--brand)'},
+  ], {w:420});
+
+  document.getElementById('batchCompareTable').innerHTML = `<thead><tr><th>指標</th><th style="text-align:right;">逐單揀貨</th>
+    <th style="text-align:right;">播種式批次</th><th style="text-align:right;">改善率</th></tr></thead><tbody>
+    <tr><td>揀貨回合數</td><td style="text-align:right;">${num(r.single.rounds)}</td><td style="text-align:right;">${num(r.seed.rounds)}</td>
+      <td style="text-align:right;">${pct(r.seed.imp_rounds)}${r.seed.imp_rounds>=10?' <span class="chip ok">達標</span>':' <span class="chip bad">未達</span>'}</td></tr>
+    <tr><td>倉內移動距離（m）</td><td style="text-align:right;">${num(r.single.dist)}</td><td style="text-align:right;">${num(r.seed.dist)}</td>
+      <td style="text-align:right;">${pct(r.seed.imp_dist)}${r.seed.imp_dist>=10?' <span class="chip ok">達標</span>':' <span class="chip bad">未達</span>'}</td></tr>
+  </tbody>`;
+
+  document.getElementById('batchGeoTable').innerHTML = !r.geo_top.length ? `<tbody><tr><td>${emptyState('無資料')}</td></tr></tbody>` :
+    `<thead><tr><th>縣市</th><th>行政區</th><th style="text-align:right;">訂單數</th><th style="text-align:right;">明細行數</th></tr></thead><tbody>
+    ${r.geo_top.map(g=>`<tr><td>${escHtml(g.city)}</td><td>${escHtml(g.dist)}</td><td style="text-align:right;">${num(g.orders)}</td><td style="text-align:right;">${num(g.lines)}</td></tr>`).join('')}</tbody>`;
+
+  loadBatchScenario(p);
+}
+async function loadBatchScenario(p){
+  const box = document.getElementById('batchScenarioTable');
+  const caps = [10,20,30];
+  const results = await Promise.all(caps.map(c=>
+    apiGet('/api/batch/strategies', {...p, capacity:c}).then(x=>({cap:c,x})).catch(()=>null)));
+  box.innerHTML = `<thead><tr><th>批次容量（SKU/趟）</th><th style="text-align:right;">揀貨回合數</th>
+    <th style="text-align:right;">回合數改善率</th><th>達標（≥10%）</th></tr></thead><tbody>
+    ${results.filter(Boolean).map(s=>`<tr ${s.cap===p.capacity?'style="background:color-mix(in srgb, var(--seq-1) 20%, transparent);"':''}>
+      <td>${s.cap}${s.cap===p.capacity?'（目前）':''}</td><td style="text-align:right;">${num(s.x.seed.rounds)}</td>
+      <td style="text-align:right;">${pct(s.x.seed.imp_rounds)}</td>
+      <td>${s.x.seed.imp_rounds>=10?'<span class="chip ok">達標</span>':'<span class="chip bad">未達標</span>'}</td></tr>`).join('')}
+  </tbody>`;
+}
+async function loadBatchDates(){
+  try{
+    const d = await apiGet('/api/batch/dates');
+    document.getElementById('batchDayList').innerHTML = d.dates.map(x=>`<option value="${x}">`).join('');
+  }catch(e){ /* 忽略：日期清單僅供輸入建議，取不到就靠使用者自行輸入 */ }
+}
+function clearBatchDay(){
+  document.getElementById('batchDayInput').value = '';
+  document.getElementById('batchDaySummary').innerHTML = '';
+  document.getElementById('batchDayResult').innerHTML = '';
+}
+async function doBatchDayQuery(){
+  const day = document.getElementById('batchDayInput').value.trim();
+  const sumBox = document.getElementById('batchDaySummary'), resBox = document.getElementById('batchDayResult');
+  if(!day){ resBox.innerHTML = `<div class="chip bad">請輸入出貨日期</div>`; return; }
+  resBox.innerHTML = emptyState('查詢中…');
+  const p = batchParams();
+  try{
+    const r = await apiGet('/api/batch/day_plan', {...p, day});
+    const totalOrders = r.waves.reduce((s,w)=>s+w.orders,0), totalLines = r.waves.reduce((s,w)=>s+w.lines,0);
+    const totalRounds = r.waves.reduce((s,w)=>s+w.rounds,0), totalDist = r.waves.reduce((s,w)=>s+w.move_dist,0);
+    sumBox.innerHTML = `
+      <div class="card stat-tile"><div class="label">波次數</div><div class="value">${r.waves.length}</div></div>
+      <div class="card stat-tile"><div class="label">總訂單數</div><div class="value">${num(totalOrders)}</div><div class="delta">明細 ${num(totalLines)} 行</div></div>
+      <div class="card stat-tile"><div class="label">總揀貨回合數</div><div class="value">${num(totalRounds)}</div></div>
+      <div class="card stat-tile"><div class="label">總移動距離</div><div class="value">${num(totalDist)} m</div></div>`;
+    resBox.innerHTML = !r.waves.length ? emptyState('當日無出貨紀錄') : r.waves.map((w,wi)=>`
+      <div class="card" style="margin-bottom:12px;">
+        <h3>${escHtml(w.city)}${w.dist?'・'+escHtml(w.dist):''} ${w.type==='dense'?'<span class="chip ok">就地併單</span>':'<span class="chip warn">稀疏併縣市</span>'}</h3>
+        <p class="card-sub">訂單 ${num(w.orders)}　｜　明細 ${num(w.lines)} 行　｜　SKU ${num(w.sku_count)}　｜　回合 ${num(w.rounds)}　｜　移動距離 ${num(w.move_dist)} m</p>
+        <div class="table-scroll" style="max-height:200px; margin-bottom:8px;"><table class="data-table"><thead><tr>
+          <th>回合</th><th style="text-align:right;">SKU數</th><th style="text-align:right;">涉及分區</th><th style="text-align:right;">移動距離</th><th style="text-align:right;">累計完成訂單</th></tr></thead><tbody>
+          ${w.round_summary.map(rs=>`<tr><td>第${rs.round}回合</td><td style="text-align:right;">${rs.sku_count}</td><td style="text-align:right;">${rs.zones}</td>
+            <td style="text-align:right;">${num(rs.dist)}</td><td style="text-align:right;">${rs.cum_done}（${pct(rs.cum_pct)}）</td></tr>`).join('')}</tbody></table></div>
+        <details><summary>展開 SKU 揀取順序（依回合）</summary>
+          <div class="table-scroll" style="max-height:280px; margin-top:8px;"><table class="data-table"><thead><tr>
+            <th>回合</th><th>商品ID</th><th>商品名稱</th><th>分區</th><th style="text-align:right;">服務訂單數</th><th style="text-align:right;">數量</th></tr></thead><tbody>
+            ${w.seq.map(s=>`<tr><td>${s.round}</td><td>${s.id}</td><td>${escHtml(s.name)}</td><td>${escHtml(s.zone)}</td>
+              <td style="text-align:right;">${s.serves}</td><td style="text-align:right;">${num(s.qty)}</td></tr>`).join('')}</tbody></table></div>
+        </details>
+      </div>`).join('');
+  }catch(e){ resBox.innerHTML = `<div class="chip bad">${escHtml(e.message)}</div>`; sumBox.innerHTML=''; }
+}
+
+/* ---------------- 6/7. KPI 儀表板（自原型 renderKpiScreen 移植；改善率／工時全部呼叫
+   /api/kpi/compute 取得，前端不用滑桿值自己乘算） ---------------- */
+function onKpiParamChange(){
+  document.getElementById('kpiSpeedVal').textContent = document.getElementById('kpiSpeed').value;
+  document.getElementById('kpiHandleVal').textContent = document.getElementById('kpiHandle').value;
+  renderKpiScreen();
+}
+async function renderKpiScreen(){
+  document.getElementById('sampleWarnKpi').innerHTML = sampleBanner();
+  const hero = document.getElementById('kpiHeroTiles');
+  if(!cleaned){ hero.innerHTML = `<div class="card">${emptyState('請先於「資料清洗」頁面完成清洗')}</div>`; document.getElementById('kpiCompareChart').innerHTML=''; document.getElementById('scenarioTable').innerHTML=''; return; }
+  hero.innerHTML = `<div class="card"><div class="loading-overlay"><div class="spinner"></div><div>計算人工揀貨 KPI（改善前 vs 改善後）中…</div></div></div>`;
+  const cap = Number((document.getElementById('batchCapSlider')||{}).value || 20);
   const speed = Number((document.getElementById('kpiSpeed')||{}).value || 1.0);
   const handle = Number((document.getElementById('kpiHandle')||{}).value || 12);
-  const cap = Number((document.getElementById('kpiCap')||{}).value || 20);
-  try{
-    const r = await apiGet('/api/kpi/compute', {mode, unit_count:unit, speed, handle_sec:handle, capacity:cap});
-    // 情境敏感度：固定其他參數，只改步行速度（保守 -20%／基準／樂觀 +20%），看工時改善率變化
-    const sens = await Promise.all([['保守',0.8],['基準',1.0],['樂觀',1.2]].map(([lab,f])=>
-      apiGet('/api/kpi/compute', {mode, unit_count:unit, speed:+(speed*f).toFixed(3), handle_sec:handle, capacity:cap})
-        .then(x=>({lab, speed:+(speed*f).toFixed(2), x})).catch(()=>null)));
-    document.getElementById('kpiResult').innerHTML = `
-      <div class="grid grid-3">
-        ${heroTile('移動距離改善率', r.dist_improvement, r.targets.dist)}
-        ${heroTile('揀貨回合數改善率', r.rounds_improvement, r.targets.rounds)}
-        ${heroTile('總揀貨工時改善率', r.worktime_improvement, r.targets.worktime)}
-      </div>
-      <div class="grid grid-2">
-        <div class="card"><h3>改善前後比較：平均移動距離（m）</h3>
-          ${barChart([{label:'改善前（現行）', value:r.orig_dist, color:'var(--seq-2)'}, {label:'改善後（ABC）', value:r.opt_dist, color:'var(--brand)'}], {w:420})}</div>
-        <div class="card"><h3>改善前後比較：總揀貨工時（分鐘）</h3>
-          ${barChart([{label:'改善前', value:r.orig_worktime, color:'var(--seq-2)'}, {label:'改善後', value:r.opt_worktime, color:'var(--brand)'}], {w:420})}</div>
-      </div>
-      <div class="card"><h3>情境敏感度分析（步行速度 ±20%）</h3>
-        <p class="card-sub">其他參數固定，只變動步行速度，觀察工時改善率是否仍達 ≥5% 目標。</p>
-        <table class="data-table"><thead><tr><th>情境</th><th style="text-align:right;">步行速度(m/s)</th><th style="text-align:right;">改善後工時(分)</th><th style="text-align:right;">工時改善率</th><th>達標(≥5%)</th></tr></thead><tbody>
-        ${sens.filter(Boolean).map(s=>`<tr ${s.lab==='基準'?'style="background:color-mix(in srgb, var(--seq-1) 20%, transparent);"':''}>
-          <td>${s.lab}</td><td style="text-align:right;">${s.speed.toFixed(2)}</td><td style="text-align:right;">${num(s.x.opt_worktime)}</td>
-          <td style="text-align:right;">${pct(s.x.worktime_improvement)}</td>
-          <td>${s.x.worktime_improvement>=5?'<span class="chip C">達標</span>':'<span class="chip A">未達標</span>'}</td></tr>`).join('')}
-        </tbody></table></div>
-      <div class="card"><p class="card-sub">基準（未規劃）平均距離 ${r.orig_dist.toFixed(1)}m　→　改善後 ${r.opt_dist.toFixed(1)}m　｜
-        基準工時 ${num(r.orig_worktime)} 分鐘　→　改善後 ${num(r.opt_worktime)} 分鐘　｜
-        揀貨回合：${num(r.single_rounds)} → ${num(r.batch_rounds)}</p></div>`;
-  }catch(e){ document.getElementById('kpiResult').innerHTML = `<div class="empty">${escHtml(e.message)}</div>`; }
+  const base = {capacity:cap, speed, handle_sec:handle, mode:'manual', a_thresh:abcParams.a, b_thresh:abcParams.b};
+  let r;
+  try{ r = await apiGet('/api/kpi/compute', base); }
+  catch(e){ hero.innerHTML = `<div class="card">${emptyState(e.message)}</div>`; return; }
+
+  hero.innerHTML = heroTile('相對移動距離改善', r.dist_improvement, r.targets.dist)
+    + heroTile('揀貨回合數改善', r.rounds_improvement, r.targets.rounds)
+    + heroTile('總揀貨工時改善', r.worktime_improvement, r.targets.worktime);
+
+  document.getElementById('kpiCompareChart').innerHTML = columnChart([
+    {label:'改善前儲位＋逐單', value:Math.round(r.orig_dist), color:'var(--series-2)'},
+    {label:'改善後儲位＋批次', value:Math.round(r.opt_dist), color:'var(--series-1)'},
+  ], {valueLabel:'人工總移動距離（m）'});
+
+  const scenarios = [['保守',0.7],['基準',1.0],['樂觀',1.3]];
+  const results = await Promise.all(scenarios.map(([lab,f])=>
+    apiGet('/api/kpi/compute', {...base, speed:+(speed*f).toFixed(3)}).then(x=>({lab,x})).catch(()=>null)));
+  const metrics = [
+    {name:'相對移動距離改善率', key:'dist_improvement', target:r.targets.dist},
+    {name:'揀貨回合數改善率', key:'rounds_improvement', target:r.targets.rounds},
+    {name:'總揀貨工時改善率', key:'worktime_improvement', target:r.targets.worktime},
+  ];
+  const rows = metrics.map(m=>{
+    const cells = results.map(res=>{
+      if(!res) return `<td>—</td>`;
+      const v = res.x[m.key], ok = v >= m.target;
+      return `<td>${v.toFixed(1)}%<br><span class="chip ${ok?'ok':'bad'}" style="margin-top:3px;">${ok?'達標':'未達'}</span></td>`;
+    }).join('');
+    return `<tr><td>${m.name}<div class="footnote" style="margin-top:2px;">目標 ≥${m.target}%</div></td>${cells}</tr>`;
+  }).join('');
+  document.getElementById('scenarioTable').innerHTML = `<thead><tr><th>KPI 指標</th>
+    <th><span class="badge-scenario" style="background:color-mix(in srgb, var(--critical) 15%, transparent); color:var(--critical);">保守 ×0.7</span></th>
+    <th><span class="badge-scenario" style="background:color-mix(in srgb, var(--series-1) 16%, transparent); color:var(--series-1);">基準 ×1.0</span></th>
+    <th><span class="badge-scenario" style="background:color-mix(in srgb, var(--good) 18%, transparent); color:var(--success-text);">樂觀 ×1.3</span></th></tr></thead><tbody>${rows}</tbody>`;
 }
 function heroTile(label, value, target){
   const achieved = value >= target;
-  const color = achieved? 'var(--good)':'var(--bad)';
+  const color = achieved ? 'var(--success-text)' : 'var(--critical)';
   return `<div class="card stat-tile">
-    <div class="label">${label}</div>
+    <div class="label">${escHtml(label)}</div>
     <div class="value" style="color:${color};">${value.toFixed(1)}%</div>
-    <div class="sub" style="color:${color};">${achieved?'✅ 達成目標':'⚠ 尚未達目標'}（目標 ≥ ${target}%）</div>
+    <div class="delta" style="color:${color};">${achieved?'✅ 達成目標':'⚠ 尚未達目標'}（目標 ≥ ${target}%）</div>
   </div>`;
 }
+function runFullPipeline(){
+  // 對應原型「🔁 重新執行全流程模擬」：原型是重跑瀏覽器內的全部運算；後端版沒有可以
+  // 重跑的前端運算，這裡改成單純重新整理 KPI 頁面（重新呼叫 /api/kpi/compute 等）。
+  renderKpiScreen();
+}
 
-// ---- 登入／註冊 ----
-let AUTH_MODE = 'login';   // 'login' | 'register'
-
-// 給 auth 端點專用的呼叫：不套用 apiGet/apiPost 的 401 自動跳轉（登入失敗的 401 要顯示錯誤，不是跳轉）。
+/* ---------------- 登入／註冊／啟動 ---------------- */
+let AUTH_MODE = 'login';
 async function authFetch(path, body){
-  const r = await fetch(API_BASE + path, {
-    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
-  });
+  const r = await fetch(API_BASE + path, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
   let data = null; try{ data = await r.json(); }catch(e){}
   return {ok:r.ok, status:r.status, data};
 }
-
 function setAuthMode(mode){
   AUTH_MODE = mode;
   document.getElementById('authTitle').textContent = mode==='login' ? '登入' : '註冊新帳號';
@@ -1109,31 +2011,28 @@ function setAuthMode(mode){
     : `已經有帳號了？<a onclick="setAuthMode('login')">回到登入</a>`;
   document.getElementById('authError').style.display = 'none';
 }
-
 function showAuthGate(errMsg){
   document.getElementById('appRoot').style.display = 'none';
   document.getElementById('authGate').style.display = 'flex';
   const err = document.getElementById('authError');
-  if(errMsg){ err.textContent = errMsg; err.style.display = 'block'; }
-  else { err.style.display = 'none'; }
+  if(errMsg){ err.textContent = errMsg; err.style.display = 'block'; } else { err.style.display = 'none'; }
   setAuthMode(AUTH_MODE);
 }
-
 async function enterApp(email){
   document.getElementById('authGate').style.display = 'none';
-  document.getElementById('appRoot').style.display = 'flex';
+  document.getElementById('appRoot').style.display = 'grid';
   document.getElementById('userEmail').textContent = email || '';
   document.getElementById('apiBaseInput').value = API_BASE;
-  // 登入後先跟後端同步狀態：這位使用者若先前已上傳並清洗過，資料仍在（後端已落地保存），
-  // 把 cleaned 旗標補回來，各分析頁（含倉儲圖）才能直接使用，不必再手動進「資料清洗」頁一次。
   try{
     const s = await apiGet('/api/ingest/status');
     cleaned = (s.status === 'ready' && s.cleaned === true);
+    usingSample = (s.filename === '（內建個案範例資料）');
   }catch(e){ cleaned = false; }
-  render();
+  buildSidebar();
+  renderFlowDiagram();
+  goScreen('overview');
   checkHealth();
 }
-
 async function submitAuth(){
   const email = document.getElementById('authEmail').value.trim();
   const password = document.getElementById('authPassword').value;
@@ -1144,48 +2043,37 @@ async function submitAuth(){
   try{
     const path = AUTH_MODE==='login' ? '/api/auth/login' : '/api/auth/register';
     const res = await authFetch(path, {email, password});
-    if(res.ok){
-      setToken(res.data.token);
-      enterApp(res.data.email);
-    } else {
-      // 後端的錯誤訊息：422 是 pydantic 驗證（格式），其餘是我們自訂的 detail 字串。
-      let m = (res.data && (res.data.detail)) || ('登入失敗（HTTP '+res.status+'）');
+    if(res.ok){ setToken(res.data.token); enterApp(res.data.email); }
+    else{
+      let m = (res.data && res.data.detail) || ('登入失敗（HTTP '+res.status+'）');
       if(Array.isArray(m)) m = m.map(x=>x.msg).join('；');
       err.textContent = m; err.style.display='block';
     }
-  }catch(e){
-    err.textContent = '無法連線到後端，請確認後端網址與伺服器狀態'; err.style.display='block';
-  }finally{ btn.disabled = false; }
+  }catch(e){ err.textContent = '無法連線到後端，請確認後端網址與伺服器狀態'; err.style.display='block'; }
+  finally{ btn.disabled = false; }
 }
-
 async function doLogout(){
   try{ if(AUTH_TOKEN) await authFetch('/api/auth/logout', {token: AUTH_TOKEN}); }catch(e){}
   setToken(null);
   document.getElementById('authEmail').value = '';
   document.getElementById('authPassword').value = '';
-  AUTH_MODE = 'login';   // 登出後回到「登入」分頁，而不是停在最後用過的「註冊」
+  AUTH_MODE = 'login';
   showAuthGate('');
 }
-
-// 允許在登入框按 Enter 直接送出
 ['authEmail','authPassword'].forEach(id=>{
   document.getElementById(id).addEventListener('keydown', e=>{ if(e.key==='Enter') submitAuth(); });
 });
 
-// ---- 啟動：先確認登入狀態，再決定顯示登入畫面或主應用 ----
 async function boot(){
   if(!AUTH_TOKEN){ showAuthGate(''); return; }
-  // 有 token：跟後端確認還有效（可能已在別處登出、或後端資料被清空）。
   try{
     const r = await fetch(API_BASE + '/api/auth/me', {headers: authHeaders()});
     if(r.ok){ const me = await r.json(); enterApp(me.email); }
-    else { setToken(null); showAuthGate(''); }
-  }catch(e){
-    // 後端連不上：仍進入主畫面（上方會顯示「無法連線」），避免因後端沒開就卡在登入頁。
-    enterApp('');
-  }
+    else{ setToken(null); showAuthGate(''); }
+  }catch(e){ enterApp(''); }
 }
 boot();
+
 </script>
 </body>
 </html>

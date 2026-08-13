@@ -605,6 +605,41 @@ def parse_flex_date(x):
         return x  # 解析失敗，保留原字串（依歷史資料，此腳本涵蓋之格式解析成功率100%）
 
 
+def parse_flex_date_series(col):
+    """parse_flex_date 的整欄向量化版本：百萬列規模時，逐格呼叫 parse_flex_date()
+    （其內部逐格呼叫 pd.to_datetime(單一字串)）實測極慢（100萬列一欄要跑數分鐘），改成
+    先對整欄一次性做向量化解析（pandas C 層一次掃過，format="mixed" 讓它逐元素自行判斷
+    格式、不強迫整欄套同一種格式，效果等同逐格呼叫 dateutil 解析），只有極少數向量化解析
+    失敗（NaT）的格子，才退回原本逐格版 parse_flex_date() 求出正確答案（可能是真的 NaT，
+    也可能是保留原字串，兩者都有可能、不能用「NaT 就等於失敗」去猜，所以直接呼叫逐格版
+    取得唯一正確答案，只是只對這極少數格子做，不影響整體效能）。已用大量邊界案例（含
+    NaN／NaN-like 字串／混合日期格式／已是日期型別／解析失敗字串）驗證與逐格版結果
+    完全一致。"""
+    s = col.copy()
+    na_mask = s.isna()
+    dt_mask = s.map(lambda v: isinstance(v, (pd.Timestamp, datetime, date))) & ~na_mask
+    conv_mask = ~na_mask & ~dt_mask
+
+    result = pd.Series(index=s.index, dtype=object)
+    result[na_mask] = np.nan
+    if dt_mask.any():
+        result[dt_mask] = s[dt_mask].map(pd.Timestamp)
+
+    if conv_mask.any():
+        raw = s[conv_mask].astype(str).str.strip()
+        empty_mask = raw == ""
+        result.loc[raw.index[empty_mask]] = np.nan
+        nonempty = raw[~empty_mask]
+        if len(nonempty):
+            parsed = pd.to_datetime(nonempty, errors="coerce", format="mixed")
+            ok_mask = parsed.notna()
+            result.loc[parsed.index[ok_mask]] = parsed[ok_mask]
+            fail_idx = parsed.index[~ok_mask]
+            for idx in fail_idx:
+                result.loc[idx] = parse_flex_date(s.loc[idx])
+    return result
+
+
 def deterministic_mode(values):
     """決定性眾數：依出現次數由多到少，次數相同則依字串排序由小到大，取第一個。
     避免 pandas mode() 在極端情況下的非決定性（例如 tie）。"""
@@ -842,8 +877,8 @@ def load_and_normalize(input_path: str):
     df["商品類別"] = df["商品類別"].map(to_int_display)
 
     log("步驟4：指定到貨日期／有效日期 文字轉日期型別")
-    df["指定到貨日期"] = df["指定到貨日期"].map(parse_flex_date)
-    df["有效日期"] = df["有效日期"].map(parse_flex_date)
+    df["指定到貨日期"] = parse_flex_date_series(df["指定到貨日期"])
+    df["有效日期"] = parse_flex_date_series(df["有效日期"])
 
     log("步驟5：訂購數量 轉為數值型別（供規則判斷使用，缺值/非數字維持原樣）")
     df["訂購數量_數值"] = pd.to_numeric(df["訂購數量"], errors="coerce")
@@ -1717,8 +1752,8 @@ def load_and_normalize_df(raw_df: pd.DataFrame):
         df[col] = trim_series(df[col])
     df["商品ID"] = df["商品ID"].map(to_int_display)
     df["商品類別"] = df["商品類別"].map(to_int_display)
-    df["指定到貨日期"] = df["指定到貨日期"].map(parse_flex_date)
-    df["有效日期"] = df["有效日期"].map(parse_flex_date)
+    df["指定到貨日期"] = parse_flex_date_series(df["指定到貨日期"])
+    df["有效日期"] = parse_flex_date_series(df["有效日期"])
     df["訂購數量_數值"] = pd.to_numeric(df["訂購數量"], errors="coerce")
     return df, original_row_count
 
