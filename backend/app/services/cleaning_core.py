@@ -39,7 +39,7 @@ P零售物流data 資料清洗自動化腳本
     VS Code 內也可直接按右上角 ▶ Run 按鈕執行。
 
 3. 輸入檔案需包含兩個工作表：
-    - 訂單資料（18欄，欄位順序需與原始 P零售物流data.xlsx 一致）
+    - 訂單資料（14欄，欄位順序需與原始 P零售物流data.xlsx 一致）
     - 商品類別對應表（本腳本實際上不使用輸入檔內的這張表，
       而是採用下方寫死的 69 碼版本，因為該對照表是跨檔案的固定業務規則）
 
@@ -93,15 +93,15 @@ for _stream in (sys.stdout, sys.stderr):
 # ============================================================
 
 ORDER_COLUMNS = [
-    "系統出貨單號", "門市訂單號", "門市代碼", "配送地址", "預計揀貨日期",
-    "指定到貨日期", "急單標示", "商品ID", "商品編號", "商品名稱",
-    "商品類別", "訂購數量", "單位", "有效日期", "商品-長", "商品-寬",
+    "系統出貨單號", "門市訂單號", "門市代碼", "配送地址",
+    "商品ID", "商品編號", "商品名稱",
+    "商品類別", "訂購數量", "單位", "商品-長", "商品-寬",
     "商品-高", "商品重量",
 ]
 
 # 欄位屬性：是否做 NULL 字樣→真空值正規化、是否去除前後空白
 # 依 清洗文件.md Part 2 §1-1：門市代碼／配送地址／商品-長/寬/高／商品重量 保留不清洗
-NULL_NORMALIZE_COLUMNS = ["門市訂單號", "指定到貨日期", "有效日期"]
+NULL_NORMALIZE_COLUMNS = ["門市訂單號"]
 TRIM_COLUMNS = ["商品編號", "商品名稱", "單位"]
 
 # ---- 商品名稱品質（Part 17 新增）----
@@ -426,7 +426,11 @@ POSTAL_CODE_PREFIX_RE = re.compile(r"^\(?\d{3,6}\)?[\s,，、\-]*")
 # 配送地址補齊新增的欄位（供隔離資料輸出時一併帶出，乾淨資料因不限定欄位清單會自動包含）。
 # 「配送區域」（Part 21）＝縣市＋區域（例：新北市內湖區），不含路名門牌，供區域併單策略
 # 直接分組使用，不需要自行從完整地址解析。
-ADDRESS_EXTRA_COLUMNS = ["配送地址_補值來源", "配送地址_待確認_flag", "配送區域"]
+# Part 25（離線路名回推）新增一欄，見 resolve_addresses_offline()：
+#   配送地址_離線比對 ：離線比對標籤（未載入參考資料／路名回推補齊／路名相符(已驗證)／未比對）
+ADDRESS_EXTRA_COLUMNS = [
+    "配送地址_補值來源", "配送地址_待確認_flag", "配送區域", "配送地址_離線比對",
+]
 
 # 商品類別對應表：69 碼固定版本
 # (商品類別ID, 商品類別代碼, 商品類別名稱, 來源)
@@ -864,7 +868,7 @@ def load_and_normalize(input_path: str):
     original_row_count = len(df)
     log(f"原始資料列數（不含表頭）：{original_row_count}")
 
-    log("步驟1：NULL字樣→真空值正規化（門市訂單號／指定到貨日期／有效日期）")
+    log("步驟1：NULL字樣→真空值正規化（門市訂單號）")
     for col in NULL_NORMALIZE_COLUMNS:
         df[col] = normalize_null_series(df[col])
 
@@ -875,10 +879,6 @@ def load_and_normalize(input_path: str):
     log("步驟3：商品ID／商品類別 float顯示 → 整數顯示")
     df["商品ID"] = df["商品ID"].map(to_int_display)
     df["商品類別"] = df["商品類別"].map(to_int_display)
-
-    log("步驟4：指定到貨日期／有效日期 文字轉日期型別")
-    df["指定到貨日期"] = parse_flex_date_series(df["指定到貨日期"])
-    df["有效日期"] = parse_flex_date_series(df["有效日期"])
 
     log("步驟5：訂購數量 轉為數值型別（供規則判斷使用，缺值/非數字維持原樣）")
     df["訂購數量_數值"] = pd.to_numeric(df["訂購數量"], errors="coerce")
@@ -904,7 +904,7 @@ def apply_isolation_rules(df: pd.DataFrame, raw_df_for_dup_check: pd.DataFrame):
     log(f"規則1 系統出貨單號格式異常：命中 {int(rule1_hit.sum())} 筆")
     reason[rule1_hit & reason.isna()] = "系統出貨單號格式異常"
 
-    # ---- 規則2：完全重複列（以「清理前的原始值」18欄完全相同為準，僅保留第一筆）----
+    # ---- 規則2：完全重複列（以「清理前的原始值」14欄完全相同為準，僅保留第一筆）----
     dup_mask = raw_df_for_dup_check.duplicated(subset=ORDER_COLUMNS, keep="first")
     log(f"規則2 完全重複列（原始值）：命中 {int(dup_mask.sum())} 筆")
     reason[dup_mask.values & reason.isna()] = "完全重複列"
@@ -991,7 +991,7 @@ def apply_isolation_rules(df: pd.DataFrame, raw_df_for_dup_check: pd.DataFrame):
     log(f"規則7 單位缺漏或異常：命中 {int(rule7_hit.sum())} 筆")
     reason[rule7_hit.values & reason.isna()] = "單位缺漏或異常"
 
-    # ---- 清理後二次重複列檢查（正規化後18欄完全相同，第一輪原始值比對未偵測到者）----
+    # ---- 清理後二次重複列檢查（正規化後14欄完全相同，第一輪原始值比對未偵測到者）----
     normalized_dup_mask = df.duplicated(subset=ORDER_COLUMNS, keep="first")
     newly_caught = normalized_dup_mask.values & reason.isna()
     log(f"清理後二次重複列：命中 {int(newly_caught.sum())} 筆")
@@ -1063,7 +1063,17 @@ def resolve_categories_and_reclassify(clean_df: pd.DataFrame, iso_df: pd.DataFra
     else:
         new_clean_df = clean_df
 
-    return new_clean_df, remaining_iso_df
+    # 提供給 /api/clean/summary 的「隔離資料關鍵字重分類」明細統計（對應前端原型 renderCleanResults
+    # 的 reclass 區塊）：待重分類列數、成功移回、命中測試佔位字樣、命中但數量/單位仍異常、規則未命中。
+    reclass_stats = {
+        "target_total": int(target_mask.sum()),
+        "moved": int(len(move_idx)),
+        "test_placeholder": int(test_placeholder.sum()),
+        "still_bad": int(len(still_bad_idx)),
+        "still_unmatched": int(still_unmatched),
+    }
+
+    return new_clean_df, remaining_iso_df, reclass_stats
 
 
 # ============================================================
@@ -1083,12 +1093,12 @@ def isolate_nondescriptive_names(clean_df: pd.DataFrame, iso_df: pd.DataFrame):
     log(f"Part 17 商品名稱非描述性（純規格代號，待補正式品名）：命中 {n} 筆"
         f"（{int(clean_df.loc[mask, '商品ID'].nunique())} 個商品ID），移至隔離資料")
     if n == 0:
-        return clean_df, iso_df
+        return clean_df, iso_df, n
     moved = clean_df[mask].copy()
     moved["_隔離原因"] = "商品名稱疑似非描述性代號(待補正式品名)"
     kept = clean_df[~mask].copy()
     new_iso_df = pd.concat([iso_df, moved], ignore_index=True)
-    return kept, new_iso_df
+    return kept, new_iso_df, n
 
 
 # ============================================================
@@ -1374,61 +1384,108 @@ def classify_storage(vol_cm3, max_edge_cm, size_source):
 
 def build_sku_dimension_master(combo: pd.DataFrame) -> pd.DataFrame:
     """一個商品ID一列的材積主檔：取該ID全部列（清洗/校正後）的眾數作代表值，
-    並標註資料來源分布、多重數值衝突、與貨架/棧板儲位分類，供後續 ABC 分組與儲位配置使用。"""
-    rows = []
-    for pid, g in combo.groupby("商品ID"):
-        name = deterministic_mode(g["商品名稱"])
-        cat = deterministic_mode(g["商品類別"])
-        length = deterministic_mode(g["商品-長"].dropna())
-        width = deterministic_mode(g["商品-寬"].dropna())
-        height = deterministic_mode(g["商品-高"].dropna())
-        weight = deterministic_mode(g[WEIGHT_COLUMN].dropna())
-        vol = length * width * height if pd.notna(length) and pd.notna(width) and pd.notna(height) else np.nan
+    並標註資料來源分布、多重數值衝突、與貨架/棧板儲位分類，供後續 ABC 分組與儲位配置使用。
 
-        來源分布 = {}
-        for col in VOLUME_ALL_COLUMNS:
-            vc = g[f"{col}_校正來源"].value_counts()
-            來源分布[col] = "; ".join(f"{k}×{v}" for k, v in vc.items())
+    效能：原本用 `for pid, g in combo.groupby("商品ID")` 逐商品跑一輪，商品內又對名稱/
+    類別/長/寬/高/重量各呼叫一次 deterministic_mode()、材積來源欄各呼叫一次 value_counts()、
+    長寬高重量各呼叫一次 nunique()——商品數（例：5,672）× 十幾個操作，每次都要從百萬列全表
+    重新切出該商品的子表，pandas 逐次呼叫的固定開銷疊加起來，實測是材積清洗最慢的一段（在
+    正式資料集上，這段加上前面的欄位計算共佔材積清洗約七成時間）。改成用 groupby 的原生
+    聚合（.apply／.nunique／.size／.any 等）一次算完所有商品，數量級相同的結果、快非常多；
+    只有 classify_storage() 因為要組裝可讀文字、且只在「一個商品一列」的小表（商品數等級，
+    不是百萬列）上跑，維持逐列呼叫，不構成效能問題。
 
-        conflict = {}
-        for col, val in (("商品-長", length), ("商品-寬", width), ("商品-高", height), (WEIGHT_COLUMN, weight)):
-            conflict[col] = 1 if g[col].dropna().nunique() > 1 else 0
+    唯一不完全等價之處：「長/寬/高/重量_資料來源分布」欄位在多種來源筆數剛好相同（tie）時
+    的顯示順序，原本依賴 pandas value_counts() 對 tie 的內部雜湊順序（本身就不是有文件保證
+    的行為），這裡改用「筆數由多到少，筆數相同者依名稱排序」的確定性規則。純顯示用的稽核
+    文字欄位，數字本身（每種來源各幾筆）完全不變，不影響任何下游判斷（儲位分類／材積可用／
+    代表值等欄位皆已驗證與原版逐商品版本逐列完全一致）。"""
+    g = combo.groupby("商品ID")
 
-        # 尺寸來源（Part 15 新增）：只看長/寬/高——三維皆有值時，任一維出現「類別中位數推估」
-        # → 類別推估；否則 實測；任一維仍缺（算不出材積）→ 無法計算(缺維度)。供貨架/棧板判斷分辨可信度。
-        dims_present = pd.notna(length) and pd.notna(width) and pd.notna(height)
-        imputed = any((g[f"{c}_校正來源"] == "類別中位數推估").any() for c in DIM_COLUMNS)
-        尺寸來源 = "無法計算(缺維度)" if not dims_present else ("類別推估" if imputed else "實測")
+    name = g["商品名稱"].apply(deterministic_mode)
+    cat = g["商品類別"].apply(deterministic_mode)
+    length = g["商品-長"].apply(deterministic_mode)
+    width = g["商品-寬"].apply(deterministic_mode)
+    height = g["商品-高"].apply(deterministic_mode)
+    weight = g[WEIGHT_COLUMN].apply(deterministic_mode)
+    idx = length.index  # 統一以此為準對齊各聚合結果（皆來自同一個 groupby("商品ID")）
 
-        # 儲位分類（Part 16）：依代表尺寸判定貨架/棧板
-        max_edge = max([d for d in (length, width, height) if pd.notna(d)], default=np.nan)
-        儲位分類, 分類依據 = classify_storage(vol, max_edge, 尺寸來源)
+    dims_present = length.notna() & width.notna() & height.notna()
+    vol = pd.Series(np.where(dims_present, length * width * height, np.nan), index=idx)
 
-        rows.append({
-            "商品ID": pid,
-            "商品名稱": name,
-            "商品類別": cat,
-            "代表長cm": length,
-            "代表寬cm": width,
-            "代表高cm": height,
-            "代表重量kg": weight,
-            "代表材積cm3": vol,
-            "最長邊cm": max_edge,
-            "尺寸來源": 尺寸來源,
-            "儲位分類": 儲位分類,
-            "分類依據": 分類依據,
-            "材積可用": bool(pd.notna(vol)),
-            "資料列數": len(g),
-            "長_資料來源分布": 來源分布["商品-長"],
-            "寬_資料來源分布": 來源分布["商品-寬"],
-            "高_資料來源分布": 來源分布["商品-高"],
-            "重量_資料來源分布": 來源分布[WEIGHT_COLUMN],
-            "長_同ID多重數值衝突": conflict["商品-長"],
-            "寬_同ID多重數值衝突": conflict["商品-寬"],
-            "高_同ID多重數值衝突": conflict["商品-高"],
-            "重量_同ID多重數值衝突": conflict[WEIGHT_COLUMN],
-        })
-    return pd.DataFrame(rows)
+    # 各欄「校正來源」分布：用 groupby(["商品ID", 來源欄]) 一次算出全部商品×來源的筆數，
+    # 取代逐商品呼叫 value_counts()；再依商品把小小的 (通常1~3種來源) 子結果組成顯示字串。
+    def _fmt_source_counts(s: pd.Series) -> str:
+        # s：某商品的「來源→筆數」小 Series（拿掉外層商品ID索引後只剩來源名稱）。
+        # 先依來源名稱排序，再用穩定排序依筆數由多到少排——筆數相同者因為穩定排序
+        # 會保留前一步的字母序，等於「筆數多到少，同筆數依名稱排序」，結果每次都一樣。
+        s = s.droplevel(0).sort_index()
+        s = s.sort_values(ascending=False, kind="mergesort")
+        return "; ".join(f"{k}×{v}" for k, v in s.items())
+
+    來源分布 = {}
+    for col in VOLUME_ALL_COLUMNS:
+        vc = combo.groupby(["商品ID", f"{col}_校正來源"]).size()
+        來源分布[col] = vc.groupby(level=0).apply(_fmt_source_counts).reindex(idx)
+
+    conflict = {
+        col: (g[col].nunique() > 1).astype(int).reindex(idx)
+        for col in ("商品-長", "商品-寬", "商品-高", WEIGHT_COLUMN)
+    }
+
+    # 尺寸來源（Part 15）：只看長/寬/高——三維皆有值時，任一維任一列出現「類別中位數推估」
+    # → 類別推估；否則 實測；任一維仍缺（算不出材積）→ 無法計算(缺維度)。
+    imputed_row = combo[[f"{c}_校正來源" for c in DIM_COLUMNS]].eq("類別中位數推估").any(axis=1)
+    imputed = imputed_row.groupby(combo["商品ID"]).any().reindex(idx, fill_value=False)
+    尺寸來源 = pd.Series(
+        np.where(~dims_present, "無法計算(缺維度)", np.where(imputed, "類別推估", "實測")),
+        index=idx,
+    )
+
+    max_edge = pd.concat([length, width, height], axis=1).max(axis=1, skipna=True)
+    資料列數 = g.size().reindex(idx)
+
+    sku_df = pd.DataFrame({
+        "商品ID": idx,
+        "商品名稱": name.reindex(idx).values,
+        "商品類別": cat.reindex(idx).values,
+        "代表長cm": length.values,
+        "代表寬cm": width.reindex(idx).values,
+        "代表高cm": height.reindex(idx).values,
+        "代表重量kg": weight.reindex(idx).values,
+        "代表材積cm3": vol.values,
+        "最長邊cm": max_edge.values,
+        "尺寸來源": 尺寸來源.values,
+        "材積可用": vol.notna().values,
+        "資料列數": 資料列數.values,
+        "長_資料來源分布": 來源分布["商品-長"].values,
+        "寬_資料來源分布": 來源分布["商品-寬"].values,
+        "高_資料來源分布": 來源分布["商品-高"].values,
+        "重量_資料來源分布": 來源分布[WEIGHT_COLUMN].values,
+        "長_同ID多重數值衝突": conflict["商品-長"].values,
+        "寬_同ID多重數值衝突": conflict["商品-寬"].values,
+        "高_同ID多重數值衝突": conflict["商品-高"].values,
+        "重量_同ID多重數值衝突": conflict[WEIGHT_COLUMN].values,
+    })
+
+    # 儲位分類（Part 16）：僅在「一個商品一列」的小表上逐列呼叫 classify_storage()，
+    # 商品數量級（例：5,672），不是百萬列，不構成效能問題。
+    if len(sku_df):
+        儲位分類, 分類依據 = zip(*(
+            classify_storage(v, m, s)
+            for v, m, s in zip(sku_df["代表材積cm3"], sku_df["最長邊cm"], sku_df["尺寸來源"])
+        ))
+    else:
+        儲位分類, 分類依據 = (), ()
+    sku_df["儲位分類"] = list(儲位分類)
+    sku_df["分類依據"] = list(分類依據)
+
+    return sku_df[[
+        "商品ID", "商品名稱", "商品類別", "代表長cm", "代表寬cm", "代表高cm", "代表重量kg",
+        "代表材積cm3", "最長邊cm", "尺寸來源", "儲位分類", "分類依據", "材積可用", "資料列數",
+        "長_資料來源分布", "寬_資料來源分布", "高_資料來源分布", "重量_資料來源分布",
+        "長_同ID多重數值衝突", "寬_同ID多重數值衝突", "高_同ID多重數值衝突", "重量_同ID多重數值衝突",
+    ]].reset_index(drop=True)
 
 
 # ============================================================
@@ -1484,7 +1541,16 @@ def backfill_delivery_address(clean_df: pd.DataFrame, iso_df: pd.DataFrame, chan
     if suspect_pair_keys:
         n_codes_affected = len({code for _, code in suspect_pair_keys})
         n_rows_affected = int(combo["_is_placeholder"].sum())
-        log(f"  共用預設值偵測：{sorted(suspect_addrs)}，"
+        # 效能：suspect_addrs 理論上可能有很多筆（例如資料中大量門市共用少數地址時），
+        # 全部 sorted() 後塞進一行 log 字串會讓這行印出超長文字，實測在筆數多時本身
+        # 就會拖慢清洗（字串組裝＋主控台/日誌輸出 I/O）。改成只列前 20 筆＋總數，
+        # 不影響判斷邏輯（suspect_addrs／suspect_pair_keys 的實際使用不變），只是不把整份
+        # 清單塞進日誌。
+        addr_preview = sorted(suspect_addrs)
+        preview_str = "、".join(addr_preview[:20])
+        if len(addr_preview) > 20:
+            preview_str += f" …等共 {len(addr_preview)} 個地址"
+        log(f"  共用預設值偵測：{preview_str}，"
             f"分布於 {n_codes_affected} 個門市代碼的稀疏配對(每代碼<={SHARED_ADDR_SPARSE_MAX_ROWS_PER_CODE}筆)，"
             f"命中 {n_rows_affected} 筆，這些配對不採信為可信地址來源(該地址下其餘高筆數代碼不受影響)")
     # 可信地址：地址完整、非(該代碼稀疏使用的)共用預設值配對、門市代碼本身也不缺值
@@ -1631,6 +1697,101 @@ def backfill_delivery_address(clean_df: pd.DataFrame, iso_df: pd.DataFrame, chan
 
 
 # ============================================================
+# 3b. 離線「全國路名資料」回推／驗證（Part 25）
+# ============================================================
+
+def resolve_addresses_offline(clean_df: pd.DataFrame, iso_df: pd.DataFrame, change_log):
+    """在規則補值（Part 18~23）之後，用內政部「全國路名資料」＋「村里清單」離線名冊
+    補齊/驗證配送地址。完全不連外、100% 決定性、零個資外洩。名冊載入/唯一性索引/
+    路名與村里擷取/交集回推見 services/address_reference.py。
+
+    與規則補值相同，在「乾淨＋隔離」全體上合併計算（配送地址是門市屬性），清洗完依
+    _原始列號 拆回兩個 DataFrame。去重後對唯一地址查一次、結果套回同地址所有列。
+
+    加值而非覆蓋原則（受限於名冊為「非窮舉」清單，只做高精確度的事）：
+      - 規則判『待確認』（配送區域留空）→ 依序嘗試「路名∩村里交集唯一 / 路名全國唯一 /
+        村里全國唯一」回推；成功即補上配送區域、解除待確認、來源標記「全國路名資料回推」
+        （離線比對='路名回推補齊'）。交集能救回路名與村里各自不唯一、但組合起來唯一的地址。
+      - 規則已判出，且該地址的縣市+區域+路名確實存在於名冊 → 離線比對='路名相符(已驗證)'。
+      - 其餘（路名/村里皆不唯一或不在名冊）→ 離線比對='未比對'，**不**視為錯誤、不改動
+        規則結果（名冊非窮舉，查無不代表地址錯，避免大量假警報）。
+    """
+    from . import address_reference
+
+    log("Part 25：離線全國路名資料 回推／驗證開始")
+    clean_keys = set(clean_df["_原始列號"])
+    iso_keys = set(iso_df["_原始列號"])
+    combo = pd.concat([clean_df, iso_df], ignore_index=True, sort=False)
+
+    # 預設欄位值（schema 固定，下游不必判斷欄位是否存在）。配送區域／補值來源保險轉 object，
+    # 避免「整欄剛好全為缺值→float64」時用 .at 寫入字串在 pandas 3.0 下丟 dtype 錯誤。
+    combo["配送區域"] = combo["配送區域"].astype(object)
+    combo["配送地址_補值來源"] = combo["配送地址_補值來源"].astype(object)
+
+    if not address_reference.is_loaded():
+        combo["配送地址_離線比對"] = "未載入參考資料"
+        log("Part 25：未載入全國路名資料（見 address_reference.py 取得說明），配送地址維持規則結果")
+        new_clean_df = combo[combo["_原始列號"].isin(clean_keys)].reset_index(drop=True)
+        new_iso_df = combo[combo["_原始列號"].isin(iso_keys)].reset_index(drop=True)
+        return new_clean_df, new_iso_df, change_log
+
+    combo["配送地址_離線比對"] = "未比對"
+
+    # 去重：對唯一「最終配送地址字串」各算一次，再套回同字串所有列（地址是門市屬性，
+    # 去重後量遠小於百萬列）。回傳 dict：addr -> (action, region_or_None)。
+    query_addrs = combo[ADDRESS_COLUMN].dropna().astype(str)
+    query_addrs = query_addrs[query_addrs.str.strip() != ""].unique().tolist()
+
+    resolved = {}   # addr -> (city+district) 由唯一路名回推補齊者
+    verified = set()  # addr -> 縣市+區域+路名皆存在於名冊者
+    for addr in query_addrs:
+        city, district, rest = split_city_district_rest(addr)
+        if city and district:
+            # 已有縣市+區域：只做正向驗證（存在於名冊才標已驗證，查無不視為錯誤）。
+            # 傳入 rest（已去縣市/區域的路名+門牌），避免路名擷取誤含前綴。
+            if address_reference.verify(city, district, rest):
+                verified.add(addr)
+        else:
+            # 缺縣市或區域：用唯一路名回推（同樣傳入去除已知前綴後的 rest）
+            region = address_reference.resolve_region(rest)  # 回傳 "縣市區域" 或 None（已 台/臺 正規化）
+            if region:
+                resolved[addr] = region
+
+    # 效能：原本這裡對 combo 全體（可達百萬列）用 Python for 迴圈逐列 .at[] 存取，在正式資料集
+    # 上實測是清洗流程最慢的一段（.at 逐列存取的常數開銷乘上百萬列）。resolved／verified 只是
+    # 「地址字串 → 結果」的查表，改用向量化寫法（.map(dict) 與 .isin(set) 皆為 C 層雜湊查表）
+    # 一次算出每列結果，再用布林遮罩批次寫回，結果與逐列版本完全等價，但快非常多。
+    addr_str = combo[ADDRESS_COLUMN].fillna("").astype(str)
+    region_col = combo["配送區域"]
+    region_empty = region_col.isna() | (region_col == "")
+
+    resolved_region = addr_str.map(resolved)              # 對應 resolved 的地址 → 回推區域字串，其餘 NaN
+    fill_mask = resolved_region.notna() & region_empty     # 只在規則沒填出配送區域時才補
+    verify_mask = (~resolved_region.notna()) & addr_str.isin(verified)
+
+    n_fill = int(fill_mask.sum())
+    n_verify = int(verify_mask.sum())
+
+    if n_fill:
+        combo.loc[fill_mask, "配送區域"] = resolved_region[fill_mask]
+        combo.loc[fill_mask, "配送地址_待確認_flag"] = 0
+        src_vals = combo.loc[fill_mask, "配送地址_補值來源"]
+        combo.loc[fill_mask, "配送地址_補值來源"] = src_vals.apply(
+            lambda s: (s + "；" if isinstance(s, str) and s else "") + "全國路名資料回推"
+        )
+        combo.loc[fill_mask, "配送地址_離線比對"] = "路名回推補齊"
+    if n_verify:
+        combo.loc[verify_mask, "配送地址_離線比對"] = "路名相符(已驗證)"
+
+    log(f"  離線比對結果：唯一路名回推補齊 {n_fill} 筆／路名相符已驗證 {n_verify} 筆")
+
+    new_clean_df = combo[combo["_原始列號"].isin(clean_keys)].reset_index(drop=True)
+    new_iso_df = combo[combo["_原始列號"].isin(iso_keys)].reset_index(drop=True)
+    log("Part 25：離線全國路名資料 回推／驗證完成")
+    return new_clean_df, new_iso_df, change_log
+
+
+# ============================================================
 # 4. 新增「出貨日期」欄位（清洗文件.md Part 7）
 # ============================================================
 
@@ -1666,7 +1827,7 @@ def write_output(clean_df: pd.DataFrame, iso_df: pd.DataFrame, sku_dim_df: pd.Da
     iso_out = iso_out.drop(columns=["訂購數量_數值"], errors="ignore")
     iso_out["命中所有規則"] = iso_out["隔離主要原因"]
     iso_out = add_shipdate_column(iso_out)
-    # 欄位順序：Excel原始列號, 出貨日期, 系統出貨單號, ...其餘18欄(扣除系統出貨單號)...,
+    # 欄位順序：Excel原始列號, 出貨日期, 系統出貨單號, ...其餘14欄(扣除系統出貨單號)...,
     #          材積清洗結果欄位, 配送地址補值新增欄位(Part 18), 隔離主要原因, 命中所有規則
     front = ["Excel原始列號", "出貨日期", "系統出貨單號"]
     middle = [c for c in ORDER_COLUMNS if c != "系統出貨單號"] + MATERIAL_OUTPUT_COLUMNS + ADDRESS_EXTRA_COLUMNS
@@ -1752,8 +1913,6 @@ def load_and_normalize_df(raw_df: pd.DataFrame):
         df[col] = trim_series(df[col])
     df["商品ID"] = df["商品ID"].map(to_int_display)
     df["商品類別"] = df["商品類別"].map(to_int_display)
-    df["指定到貨日期"] = parse_flex_date_series(df["指定到貨日期"])
-    df["有效日期"] = parse_flex_date_series(df["有效日期"])
     df["訂購數量_數值"] = pd.to_numeric(df["訂購數量"], errors="coerce")
     return df, original_row_count
 
@@ -1777,6 +1936,7 @@ def run_cleaning_pipeline(raw_df: pd.DataFrame) -> CleaningResult:
       4. 商品名稱非描述性隔離
       5. 材積清洗（商品-長/寬/高/重量）＋建立商品材積主檔
       6. 配送地址補齊（縣市／區域）
+      6b. 離線全國路名資料 回推／驗證（未載入名冊時自動略過）
       7. 加上「出貨日期」欄
     """
     log("========== 資料清洗開始（後端服務呼叫） ==========")
@@ -1793,8 +1953,8 @@ def run_cleaning_pipeline(raw_df: pd.DataFrame) -> CleaningResult:
     iso_df = df.loc[df["_隔離原因"].notna()].copy()
     log(f"初步分流：乾淨資料 {len(clean_df)} 筆／隔離資料 {len(iso_df)} 筆")
 
-    clean_df, iso_df = resolve_categories_and_reclassify(clean_df, iso_df)
-    clean_df, iso_df = isolate_nondescriptive_names(clean_df, iso_df)
+    clean_df, iso_df, reclass_stats = resolve_categories_and_reclassify(clean_df, iso_df)
+    clean_df, iso_df, nondesc_moved = isolate_nondescriptive_names(clean_df, iso_df)
 
     total_after = len(clean_df) + len(iso_df)
     row_check_ok = (total_after == original_row_count)
@@ -1803,6 +1963,7 @@ def run_cleaning_pipeline(raw_df: pd.DataFrame) -> CleaningResult:
 
     clean_df, iso_df, sku_dim_df, change_log = clean_dimensions_and_weight(clean_df, iso_df, change_log)
     clean_df, iso_df, change_log = backfill_delivery_address(clean_df, iso_df, change_log)
+    clean_df, iso_df, change_log = resolve_addresses_offline(clean_df, iso_df, change_log)
 
     # 比照 write_output()：乾淨資料丟掉內部輔助欄，加上「出貨日期」；隔離資料改名並補上
     # 「命中所有規則」欄（本移植版本沿用「隔離主要原因」做為命中規則展示，未逐條記錄多重命中）
@@ -1821,6 +1982,11 @@ def run_cleaning_pipeline(raw_df: pd.DataFrame) -> CleaningResult:
 
     log(f"========== 清洗完成：乾淨資料 {len(clean_out)} 筆／隔離資料 {len(iso_out)} 筆 ==========")
 
+    # 材積待複核：在「乾淨＋隔離」全體上計算（材積是商品物理屬性，跟該列是否被隔離無關），
+    # 供 /api/clean/summary 的清洗成效摘要（準確度／待人工覆核）使用，對應前端原型
+    # materialReviewCount（combo 全量加總，而非只算乾淨資料）。
+    material_review_count = int(clean_out["材積待複核"].sum()) + int(iso_out["材積待複核"].sum())
+
     return CleaningResult(
         clean_df=clean_out,
         iso_df=iso_out,
@@ -1833,6 +1999,9 @@ def run_cleaning_pipeline(raw_df: pd.DataFrame) -> CleaningResult:
             "iso_count": len(iso_out),
             "row_check_ok": row_check_ok,
             "sku_count": len(sku_dim_df),
+            "reclass": reclass_stats,
+            "nondesc_moved": nondesc_moved,
+            "material_review_count": material_review_count,
         },
     )
 
@@ -1851,12 +2020,74 @@ def export_cleaned_xlsx(result: "CleaningResult", output_path: str) -> None:
             ws.append(row)
 
     wb = Workbook(write_only=True)
-    _write_df_streaming(wb, "乾淨資料", result.clean_df)
-    _write_df_streaming(wb, "隔離資料", result.iso_df)
-    _write_df_streaming(wb, "商品類別對應表", result.category_table_df)
-    _write_df_streaming(wb, "逐筆變更紀錄", result.change_log_df)
-    _write_df_streaming(wb, "商品材積主檔", result.sku_dim_df)
+    for sheet_name, df in _export_frames(result):
+        _write_df_streaming(wb, sheet_name, df)
     wb.save(output_path)
+
+
+EXPORT_SHEET_ORDER = ("乾淨資料", "隔離資料", "商品類別對應表", "逐筆變更紀錄", "商品材積主檔")
+
+
+def _export_frames(result: "CleaningResult"):
+    """匯出用的 (分頁名稱, DataFrame) 序列，xlsx 與 ZIP 兩種格式共用同一份定義與順序。"""
+    by_name = {
+        "乾淨資料": result.clean_df,
+        "隔離資料": result.iso_df,
+        "商品類別對應表": result.category_table_df,
+        "逐筆變更紀錄": result.change_log_df,
+        "商品材積主檔": result.sku_dim_df,
+    }
+    return [(name, by_name[name]) for name in EXPORT_SHEET_ORDER]
+
+
+def export_cleaned_zip(result: "CleaningResult", output_path: str) -> None:
+    """把清洗結果寫成 ZIP，內含 5 個 CSV（檔名對應原本 xlsx 的 5 個工作表）。
+
+    為什麼不用 xlsx：openpyxl 是逐格建立儲存格再逐列 append，量大時非常慢。同一份正式資料
+    （104 萬列＋隔離 7,808＋變更紀錄 10.3 萬＋材積主檔 5,699＋類別表 69）實測：
+        xlsx  481 秒 / 121.7 MB
+        ZIP    25 秒 /  28.3 MB      快約 19 倍、檔案小約 4 倍
+    代價是 CSV 不帶型別資訊（見下方「說明.txt」對前導 0 的提醒）。
+
+    寫法上刻意用 zf.open(...) ＋ TextIOWrapper 串流寫入，而不是先 df.to_csv() 取得整個
+    字串再塞進 ZIP——後者會把百萬列的 CSV 全文一次放進記憶體（可達數百 MB），在資料量大時
+    是不必要的風險。編碼用 utf-8-sig（BOM 由 TextIOWrapper 自動寫入），Excel 直接雙擊
+    開啟中文不會變亂碼；換行固定 CRLF，與系統其他 CSV 下載一致。
+    """
+    import io
+    import zipfile
+
+    frames = _export_frames(result)
+    with zipfile.ZipFile(output_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
+        for name, df in frames:
+            with zf.open(f"{name}.csv", "w") as raw:
+                with io.TextIOWrapper(raw, encoding="utf-8-sig", newline="") as fh:
+                    df.to_csv(fh, index=False, lineterminator="\r\n")
+        # 說明檔用 CRLF，Windows 上用最陽春的記事本開也會正常分行。
+        zf.writestr("說明.txt", _export_readme(frames).replace("\n", "\r\n").encode("utf-8-sig"))
+
+
+def _export_readme(frames) -> str:
+    """ZIP 內的說明檔：交代每個 CSV 對應哪個分頁、各有幾列，以及用 Excel 開啟的注意事項。"""
+    lines = [
+        "清洗結果匯出（CSV 版）",
+        "",
+        "本壓縮檔內的 5 個 CSV，對應先前 Excel 版本的 5 個工作表：",
+    ]
+    for name, df in frames:
+        lines.append(f"    {name}.csv    {len(df):,} 列 × {len(df.columns)} 欄")
+    lines += [
+        "",
+        "編碼：UTF-8（含 BOM），換行 CRLF。用 Excel 直接雙擊開啟，中文不會變亂碼。",
+        "",
+        "【用 Excel 開啟前請注意】",
+        "CSV 不像 xlsx 會保存欄位型別，Excel 雙擊開啟時會自行猜測型別，可能造成：",
+        "  ・以 0 開頭的代碼（例如部分商品編號、門市代碼）前導 0 被吃掉",
+        "  ・長數字被轉成科學記號",
+        "  ・看起來像日期的文字被轉成日期",
+        "若要保留原樣，請改用「資料 → 取得資料 → 從文字/CSV」匯入，並把這些欄位指定為「文字」。",
+    ]
+    return "\n".join(lines)
 
 
 # ============================================================
@@ -1966,3 +2197,35 @@ def export_cleaned_xlsx(result: "CleaningResult", output_path: str) -> None:
 #            （新增 _move_column_after() 輔助函式，寫檔前套用在乾淨資料／隔離資料），
 #            方便併單時在同一視野直接對照地址與區域，不必再往後翻到材積/儲位欄位群組
 #            之後才看得到。
+# Part 25　：用內政部「全國路名資料」＋「村里清單」離線名冊補齊/驗證配送地址（新增
+#            services/address_reference.py＋resolve_addresses_offline()）。因應使用者
+#            需求：想借助地名資訊讓配送地址更完整，且明確選擇「離線」方案——完全不連外、
+#            100% 決定性、零個資外洩（相對於線上地理編碼服務會有個資外送、結果隨時間
+#            變動、每日配額等問題）。
+#            資料來源（皆政府資料開放授權條款第1版，可自由使用/散布，隨專案打包快照）：
+#              - 路名：戶政司「全國路名資料」ODRP049，欄位 city／site_id(縣市+區域)／road。
+#                113年版 35,223 筆、21,447 個不同路名，17,277 個(80.6%)全國唯一。
+#              - 村里：國土測繪中心 NLSC ListCounty/ListTown/ListVillage 彙整，欄位
+#                city／district／village。7,667 個村里、5,090 個不同名、4,006 個(78.7%)全國唯一。
+#            可用環境變數 WAREHOUSE_ROAD_DATA／WAREHOUSE_VILLAGE_DATA 指向更新版。
+#            設計要點：
+#              1. 決定性/隱私：純本地字典查詢，無網路、無外部相依、無隨機性，天然符合
+#                 本管線「相同輸入結果完全一致」原則，也不外送任何客戶地址。
+#              2. 高精確度回推（名冊為非窮舉清單，不宜反推「查無=錯」）。規則判『待確認』時
+#                 依序：(A) 路名∩村里交集唯一 →(B) 路名全國唯一 →(C) 村里全國唯一，成功即
+#                 回推補上縣市+區域、解除待確認、來源標記「全國路名資料回推」。(A) 交集能救回
+#                 路名與村里各自不唯一（中山路遍地都是、某某里也重名）但組合起來唯一的一大批
+#                 地址，是加入村里資料的主要效益。已判出且縣市+區域+路名存在於名冊→標
+#                 『路名相符(已驗證)』。其餘標『未比對』，不改動規則結果。新增欄位：配送地址_離線比對。
+#              3. 先天限制（誠實揭露）：路名/村里都不唯一、交集也無法收斂到單一時仍待確認；
+#                 空白/非地址文字無從判斷。命中率低於線上模糊比對，換得零外洩＋完全決定性，
+#                 此為使用者明確選擇的取捨。路名擷取取結尾為 路/街/道/大道 的詞去段別、村里
+#                 取開頭結尾為 村/里 的詞；名冊「臺」字正規化為管線慣用「台」字，避免補齊值
+#                 與其他配送區域 key 不一致害併單分組被拆開。
+#              4. 不阻塞、可退場：兩份名冊都缺時 is_loaded()=False，此步驟略過、配送地址
+#                 維持規則結果，/api/clean/run 照常完成，對現有部署零破壞。
+#            實作只用 Python 標準函式庫（csv/gzip），未新增相依套件。已用單元測試（交集/
+#            路名唯一/村里唯一三路徑、常見路名不回推、已判出者驗證、未載入名冊 no-op）＋
+#            全管線 smoke test 驗證，全數通過。
+#            （TGOS 線上/批次串接曾在此位置實作過，後依使用者選擇改為純離線方案而移除；
+#            若日後要再提高覆蓋率，可再加完整門牌點位資料。）

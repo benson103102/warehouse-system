@@ -11,6 +11,9 @@
     holtForecast/fcNaive/...→ holt_forecast/fc_naive/...
     fcSelectBest/fcValidate → fc_select_best/fc_validate
     computeLifecycle        → lifecycle_classify
+    getNewSkuSet            → new_sku_set
+    ensureAnalogue/analogueLevel → analogue_levels
+    fcColdStartPred         → cold_start_predict / fc_validate_cold
     computeBatch            → batch_simulate
     whAllocateCategories +
     computeStorageAssignment→ build_slot_pool + allocate_categories_to_slots + compute_storage_assignment
@@ -346,8 +349,49 @@ def series_for(indexed, periods, key=None):
     return [float(s.get(p, 0)) for p in periods]
 
 
+def sku_totals_in_periods(agg, periods, target="cnt"):
+    """各 SKU 在指定期別內的出貨合計（target="cnt" 揀貨次數／"qty" 出貨量），由高到低排序；
+    合計為 0（該期間內完全沒出貨）者直接排除。
+
+    存在的理由：agg 裡現成的 sku_total／sku_total_cnt 是「整份資料」的累計，包含被
+    forecast_periods() 排除掉的、尚未過完的最後一個月。凡是以預測為主題的頁面，母體都該跟
+    預測看得到的期間一致，否則只在那個末月出過貨的商品會被算進來——它在預測期間內整條序列
+    都是 0，模型只會回 0，既沒有分級意義，也讓各頁的 SKU 總檔數互相對不起來（實測差 71 檔）。
+
+    註：這類商品仍然是實際會出貨的商品，只是「還看不到」而非「需求為零」。它們不會因此從
+    儲位配置消失——compute_wh_assignment 末段有保底，沒被 place_after 配到位的商品會落回
+    所屬類別在「改善前」的分區。"""
+    key_map = agg["by_sku_cnt"] if target == "cnt" else agg["by_sku"]
+    in_window = key_map[key_map.index.get_level_values(1).isin(set(periods))]
+    totals = in_window.groupby(level=0).sum()
+    return totals[totals > 0].sort_values(ascending=False)
+
+
 FC_TEST_MONTH = 3
 FC_TEST_WEEK = 13
+FC_HORIZONS = (1, 2, 3)   # 可選預測區間：次一個月／次二個月／次一季
+
+
+def forecast_periods(agg, granularity="month"):
+    """需求預測實際採用的期別：月粒度時排除「尚未過完」的最後一個月。
+
+    例如資料抓到 2026-05-12 就停，5 月只累積了 12 天，把它當成一個完整月拿去驗證／
+    當基準，會讓整體看起來突然大幅衰退（其實只是月份還沒過完）。排除後 2026-04 才是
+    最後一個完整月。週粒度暫不處理（週的邊界判斷另有規則，且本專案 KPI 以月為準）。
+    """
+    if granularity != "month":
+        return agg["periods"]
+    return _predicted_periods(agg)
+
+
+def forecast_base_idx(periods, max_horizon=FC_TEST_MONTH):
+    """基準期切點（train_end）：固定用「最長預測區間」往回推算，讓 H=1/2/3 共用同一個基準期。
+
+    例如最後一個完整月是 2026-04、max_horizon=3 → train_end 指向 2026-02，
+    基準期＝2026-01，測試期自 2026-02 起算。選「次一個月」時就只驗 2026-02 這一期，
+    但站的位置不變——三種區間才能互相比較（對應原 fcBaseIdx，但不寫死日期）。
+    """
+    return len(periods) - max_horizon
 
 
 def holt_forecast(values, alpha, beta, horizon):
@@ -459,13 +503,83 @@ def fc_validate(series, test_len):
     return {"model": sel["model_name"], "pred": pred, "actual": actual, "mase": mase, "wape": wape}
 
 
+# ---- 多步驗證（對應原 fcSelectBestAt／fcMultiStep／fcValidateMS）----------------
+#
+# 與上面 fc_validate（滾動一步）的差別，是這次改用的驗證方式的重點：
+#   滾動一步：預測第 t 期時，可以看到第 t-1 期的**實際值**。等於每走一步就被餵一次答案，
+#            只回答得了「下個月大概多少」，而且會把準確度估得偏樂觀。
+#   多步    ：站在基準期（train_end）一次往後推 H 期，過程中完全看不到測試期任何實際值。
+#            這才對應真實情境——採購在 1 月底要一次決定 2、3、4 月各備多少貨。
+# 所以「次一個月／次二個月／次一季」三種預測區間共用**同一個基準期**，只是往後推得遠近不同。
+
+def fc_select_best_at(series, train_end):
+    """在指定的基準期切點上做 walk-forward 選模（對應原 fcSelectBestAt）。
+    與 fc_select_best 的差別只在 train_end 由呼叫端指定，而不是用 len-test_len 反推——
+    這樣不同預測區間（H=1/2/3）可以固定用同一個基準期選模。"""
+    train = series[:train_end]
+    denom = fc_mean_abs_diff(train)
+    start = max(3, train_end - 6)
+    best_name, best_fn, best_mase = FC_MODELS[0][0], FC_MODELS[0][1], float("inf")
+    for name, fn in FC_MODELS:
+        ae, cnt = 0.0, 0
+        for t in range(start, train_end):
+            ae += abs(series[t] - fn(series[:t]))
+            cnt += 1
+        mase = ((ae / cnt) / denom if denom > 0 else (ae / cnt)) if cnt > 0 else float("inf")
+        if mase < best_mase:
+            best_mase, best_name, best_fn = mase, name, fn
+    return {"model_name": best_name, "model_fn": best_fn, "denom": denom,
+            "train_end": train_end, "train_mase": best_mase}
+
+
+def fc_multi_step(name, series, train_end, h):
+    """用選定模型從 train_end 往後預測第 h 期（對應原 fcMultiStep）。
+    只餵 series[:train_end]，絕不讓模型看到測試期的實際值。"""
+    hist = series[:train_end]
+    if name == "Holt":
+        return holt_forecast(hist, 0.3, 0.15, h)[h - 1]
+    if name == "季節Naive":
+        j = train_end + h - 1
+        return series[j - 12] if j - 12 >= 0 else (hist[-1] if hist else 0.0)
+    # 其餘模型（Naive／MA3／SES／Croston）本身沒有趨勢項，多步預測即水平延伸，
+    # 每一期都回同一個值——與原型行為一致。
+    fn = dict(FC_MODELS).get(name, fc_naive)
+    return fn(hist)
+
+
+def fc_validate_multistep(series, horizon, train_end):
+    """多步驗證：站在 train_end 一次往後推 horizon 期，與實際值比對（對應原 fcValidateMS）。"""
+    sel = fc_select_best_at(series, train_end)
+    name = sel["model_name"]
+    pred, actual = [], []
+    for h in range(1, horizon + 1):
+        j = train_end + h - 1
+        pred.append(max(0.0, fc_multi_step(name, series, train_end, h)))
+        actual.append(series[j] if j < len(series) else 0.0)
+    ae = sum(abs(p - a) for p, a in zip(pred, actual))
+    sum_a = sum(actual)
+    mase = (ae / horizon) / sel["denom"] if sel["denom"] > 0 else None
+    wape = (ae / sum_a * 100) if sum_a > 0 else None
+    return {"model": name, "pred": pred, "actual": actual, "mase": mase, "wape": wape}
+
+
 # ============================================================
 # 4. 商品生命週期分類（新品／滯銷／正常）
 # ============================================================
 
-def lifecycle_classify(agg, recent_n):
+def lifecycle_classify(agg, recent_n, train_end=None):
+    """新品／滯銷／正常分類。
+
+    新品的判準與需求預測的冷啟動一致：一律站在「做預測的時間點」（train_end，即訓練期
+    結束、測試期開始的切點）回頭看 recent_n 期。這樣同一個 SKU 在生命週期卡、預測趨勢圖、
+    SKU Top 表三處的「是不是新品」不會互相矛盾（見 new_sku_set）。
+    train_end=None 時預設為 n - FC_TEST_MONTH，與 fc_validate 的切點相同。
+    滯銷仍以「資料結尾」為準——它問的是「到現在為止還有沒有在動」，本來就該看最新狀態。
+    """
     periods = agg["periods"]
     n = len(periods)
+    if train_end is None:
+        train_end = n - FC_TEST_MONTH
     rows = []
     for sku, meta in agg["sku_meta"].items():
         vals = series_for(agg["by_sku"], periods, key=sku)
@@ -480,7 +594,7 @@ def lifecycle_classify(agg, recent_n):
         if first < 0:
             continue
         dorm_months = n - 1 - last
-        cls = "新品" if first >= n - recent_n else ("滯銷" if last <= n - 1 - recent_n else "正常")
+        cls = "新品" if first >= train_end - recent_n else ("滯銷" if last <= n - 1 - recent_n else "正常")
         rows.append({
             "sku": sku, "code": meta.get("商品編號"), "name": meta.get("商品名稱"),
             "cat": meta.get("商品類別"), "first": periods[first], "last": periods[last],
@@ -489,7 +603,117 @@ def lifecycle_classify(agg, recent_n):
     counts = {"新品": 0, "滯銷": 0, "正常": 0}
     for r in rows:
         counts[r["cls"]] += 1
-    return {"rows": rows, "counts": counts, "periods": periods, "recent_n": recent_n}
+    return {"rows": rows, "counts": counts, "periods": periods, "recent_n": recent_n,
+            "train_end": train_end,
+            "base_period": periods[train_end - 1] if 0 < train_end <= n else None}
+
+
+# ============================================================
+# 4b. 新品·冷啟動處理（對應原 getNewSkuSet／ensureAnalogue／analogueLevel／fcColdStartPred）
+#
+# 為什麼要另外處理：新品的歷史序列太短（首次出貨才落在最近 N 個月），fc_select_best()
+# 的 walk-forward 選模其實是在對一串「幾乎全是 0、只有末尾幾期有值」的序列挑模型，
+# 選出來的模型與算出來的 MASE／WAPE 都沒有統計意義。原型的做法是改用「類比估計」：
+# 拿同類別＋同儲位區（貨架/棧板）的**成熟品**水準中位數當新品的預測值，並明確標示
+# 「新品·冷啟動不評分」——不給 MASE／WAPE，避免用一個不可靠的數字誤導使用者。
+# ============================================================
+
+COLD_START_MODEL = "冷啟動(類比)"
+# cold_start_predict() 的 source 值：水準取自「自身近期實際值」代表這個新品在訓練期內
+# 確實有出貨紀錄（只是期數不足以跑時序選模），與「完全沒有自身資料、拿同類中位數猜」
+# 是兩種可信度截然不同的情況，儲位配置據此決定要不要彈性給位（見 _predict_sku_value）。
+COLD_START_SOURCE_OWN = "自身近期實際值"
+
+# 新品判定的預設視窗（個月）。需求預測頁（routers/forecast.py）、儲位配置的商品查詢卡片
+# （routers/storage.py）、以及配置用的預測值（predicted_sku_values）三處共用這一個預設值，
+# 才不會出現「同一個 SKU 在 A 頁被判為新品、在 B 頁不是」的矛盾（見 new_sku_set）。
+#
+# 為什麼是 3 不是 6：新品會走冷啟動預測、且在儲位配置裡採「暫定彈性給位」不佔黃金區
+# （見 place_after），視窗開太大會把已經有半年以上穩定出貨、其實跑得動時序模型的商品也
+# 一起掃進來。實測正式資料（24 個月、5,643 個 SKU）：
+#     recent_n=6 → 新品 3,387 個（60.0%）
+#     recent_n=3 → 新品   796 個（14.1%）
+# 差距這麼大是因為該份資料在 2025-08～10 有一波約 2,600 個 SKU 的集中上架（平常每月僅
+# 60～90 個），視窗 6 個月剛好整個罩進去。3 個月剛好落在那波之後，讓那批商品以「正常品」
+# 身分用自己的歷史跑預測，只有真正剛上架、歷史確實不足的商品才走冷啟動。
+COLD_START_RECENT_N = 3
+
+
+def new_sku_set(agg, recent_n, train_end=None):
+    """回傳「新品」SKU 集合：首次出貨落在訓練期結束前 recent_n 期之內（對應原 getNewSkuSet）。
+
+    train_end 預設為 len(periods) - FC_TEST_MONTH，即與 fc_validate 的訓練/測試切點一致：
+    判斷是不是新品要站在「做預測的那個時間點」上看，不能偷看測試期。
+    """
+    periods = agg["periods"]
+    n = len(periods)
+    if not n:
+        return set()
+    if train_end is None:
+        train_end = n - FC_TEST_MONTH
+    out = set()
+    for sku in agg["sku_meta"]:
+        vals = series_for(agg["by_sku"], periods, key=sku)
+        first = next((i for i, v in enumerate(vals) if v > 0), -1)
+        if first >= 0 and first >= train_end - recent_n:
+            out.add(sku)
+    return out
+
+
+def analogue_levels(agg, sku_material, target, train_end, new_set):
+    """建立「(類別, 儲位區) → 成熟品平均每期水準的中位數」對照表（對應原 ensureAnalogue）。
+
+    只用非新品（成熟品）在訓練期內的資料算，避免拿新品去估新品。
+    """
+    periods = agg["periods"]
+    key_map = agg["by_sku_cnt"] if target == "cnt" else agg["by_sku"]
+    groups = {}
+    for sku, meta in agg["sku_meta"].items():
+        if sku in new_set:
+            continue
+        vals = series_for(key_map, periods, key=sku)
+        total = sum(vals[:train_end])
+        if total <= 0:
+            continue
+        level = total / train_end if train_end > 0 else 0.0
+        key = (meta.get("商品類別"), sku_material.get(sku, "shelf"))
+        groups.setdefault(key, []).append(level)
+    med = {}
+    for key, arr in groups.items():
+        arr.sort()
+        med[key] = arr[len(arr) // 2]
+    return {"median": med, "peer_count": {k: len(v) for k, v in groups.items()}}
+
+
+def cold_start_predict(series, horizon, analogue_level=0.0, train_end=None):
+    """新品的冷啟動預測（對應原 fcColdStartPred）：優先用自身「訓練期內最後一個非零值」，
+    完全沒有自身實際值時才退回同類別／同區的類比水準。預測為水平線（每期同值）。"""
+    if train_end is None:
+        train_end = len(series)
+    level = 0.0
+    for i in range(min(train_end, len(series)) - 1, -1, -1):
+        if series[i] > 0:
+            level = series[i]
+            break
+    source = COLD_START_SOURCE_OWN
+    if level <= 0:
+        level = analogue_level or 0.0
+        source = "同類別同區成熟品中位數"
+    level = max(0.0, float(level))
+    return {"model": COLD_START_MODEL, "pred": [level] * horizon,
+            "level": level, "source": source, "cold": True}
+
+
+def fc_validate_cold(series, test_len, analogue_level=0.0):
+    """新品版的 fc_validate：結構與 fc_validate 一致，但預測改用冷啟動，且**不給準確度指標**
+    （mase／wape 皆為 None），對應原型的「新品·冷啟動不評分」。"""
+    n = len(series)
+    train_end = n - test_len
+    cs = cold_start_predict(series, test_len, analogue_level, train_end)
+    actual = [series[t] for t in range(train_end, n)]
+    return {"model": cs["model"], "pred": cs["pred"], "actual": actual,
+            "mase": None, "wape": None, "cold": True,
+            "level": cs["level"], "level_source": cs["source"]}
 
 
 # ============================================================
@@ -596,40 +820,51 @@ def compute_storage_assignment(items, cat_name_map, zones, a_thresh=70.0, b_thre
 # 7. KPI（距離／揀貨回合數／揀貨工時改善率）
 # ============================================================
 
-def compute_kpi(storage_result, batch_result, unit_count=3, speed=1.0, handle_sec=12.0, mode="manual"):
-    """對應原 runStorageSimulation()：整合儲位配置改善結果與批次併單結果，
-    算出移動距離／揀貨工時改善率，並與專案章程訂下的 KPI 目標（距離≥10%、
-    回合數≥10%、工時≥5%）比對。"""
-    orig_dist = storage_result["baseline"]
-    opt_dist = storage_result["weighted"]
+def compute_kpi(strategies, speed=1.0, handle_sec=12.0):
+    """對應原型『KPI 儀表板』頁 renderKpiScreen()：整合『揀貨策略』頁同一套地理感知批次
+    模擬結果（compute_batch_strategies：逐單揀貨 vs 播種式批次揀貨），算出移動距離／揀貨
+    回合數／揀貨工時改善率，並與專案章程訂下的 KPI 目標（距離≥10%、回合數≥10%、工時≥5%）
+    比對。
+
+    改版重點（沿用原型算法，逐項對齊）：
+    - 距離／回合數改善率只跟儲位配置與批次分波有關，跟步行速度／取放秒數無關：直接沿用
+      strategies 內「single_before」(改善前儲位＋逐單，每張訂單各自來回一次) 與「seed」
+      (改善後儲位＋播種式批次，同一波內合併回合) 這組本來就存在、且與『揀貨策略』頁顯示
+      數字一致的真實路徑距離／回合數。先前改用「儲位表全體平均距離」這種跟實際揀貨路徑
+      無關的粗略估計值，在儲位/類別數量夠多時兩種平均會互相收斂，改善率被拉到接近 0%
+      （使用者回報的 0.2% 即為此故）。
+    - 工時改善率才跟步行速度／取放秒數有關，且比照原型分別計算：改善前（逐單）取放次數
+      用「總明細行數」total_lines_raw（每張訂單各自取放，即使同商品也各取一次）；改善後
+      （播種式批次）取放次數用「播種後實際揀取品項數」seed_picks（同一波內同商品合併只
+      取一次，本來就會比改善前少，是批次揀貨除了縮短距離外的另一項時間節省來源）；以
+      「小時」為單位（原型即以 /3600 表示），不額外乘以人力／AGV 因子——那是原型另一個
+      「儲位／情境模擬」頁的參數，實際保留下來的 KPI 儀表板頁面本身沒有這項設定。"""
+    orig_dist = strategies["single_before"]["dist"]
+    opt_dist = strategies["seed"]["dist"]
     dist_improvement = (orig_dist - opt_dist) / orig_dist * 100 if orig_dist else 0.0
 
-    agv_factor = 1.35 if mode == "agv" else 1.0
-    eff_speed = max(1.0, speed * agv_factor)
+    orig_rounds = strategies["single"]["rounds"]
+    opt_rounds = strategies["seed"]["rounds"]
+    rounds_improvement = strategies["seed"]["imp_rounds"]
 
-    def worktime_minutes(dist_m, rounds):
-        if not rounds:
-            return 0.0
-        avg_lines = batch_result["total_lines"] / rounds
-        move_min = (dist_m * 2 * rounds) / eff_speed
-        handle_min = (avg_lines * handle_sec / 60) * rounds
-        return (move_min + handle_min) / max(1, unit_count)
+    orig_picks = strategies["total_lines_raw"]
+    opt_picks = strategies["seed_picks"]
 
-    orig_worktime = worktime_minutes(orig_dist, batch_result["single_rounds"])
-    opt_worktime = worktime_minutes(opt_dist, batch_result["batch_rounds"])
+    orig_worktime = (orig_dist / speed + orig_picks * handle_sec) / 3600.0
+    opt_worktime = (opt_dist / speed + opt_picks * handle_sec) / 3600.0
     worktime_improvement = (orig_worktime - opt_worktime) / orig_worktime * 100 if orig_worktime else 0.0
 
     return {
-        "mode": mode, "unit_count": unit_count, "speed": speed, "handle_sec": handle_sec,
+        "speed": speed, "handle_sec": handle_sec,
         "orig_dist": orig_dist, "opt_dist": opt_dist, "dist_improvement": dist_improvement,
         "orig_worktime": orig_worktime, "opt_worktime": opt_worktime,
         "worktime_improvement": worktime_improvement,
-        "single_rounds": batch_result["single_rounds"], "batch_rounds": batch_result["batch_rounds"],
-        "rounds_improvement": batch_result["improvement"], "capacity": batch_result["capacity"],
+        "single_rounds": orig_rounds, "batch_rounds": opt_rounds,
+        "rounds_improvement": rounds_improvement, "capacity": strategies["capacity"],
         "targets": {"dist": 10.0, "rounds": 10.0, "worktime": 5.0},
         "targets_met": {
             "dist": dist_improvement >= 10.0,
-            "rounds": batch_result["improvement"] >= 10.0,
+            "rounds": rounds_improvement >= 10.0,
             "worktime": worktime_improvement >= 5.0,
         },
     }
@@ -685,10 +920,15 @@ def compute_predicted_category_abc(clean_df, cat_name_map, a_thresh=70.0, b_thre
     agg = compute_forecast_agg(clean_df, "month")
     if not agg or not agg["periods"]:
         return None
-    periods = _predicted_periods(agg)
-    test_len = FC_TEST_MONTH
-    if len(periods) < test_len + 4:
+    periods = forecast_periods(agg, "month")
+    horizon = FC_TEST_MONTH
+    if len(periods) < horizon + 4:
         return {"insufficient": True}
+    # 基準期切點與需求預測頁 /api/forecast/breakdown 取同一個（forecast_base_idx），且同樣
+    # 改用「多步驗證」——站在基準期一次往後推 horizon 期，過程中看不到測試期任何實際值。
+    # 先前用的 fc_validate() 是滾動一步預測，每走一步都會被餵前一期的實際值，會把準確度
+    # 估得偏樂觀（見 fc_validate_multistep 上方的說明），與需求預測頁顯示的數字對不起來。
+    train_end = forecast_base_idx(periods, horizon)
 
     cat_mat = get_cat_material_map(clean_df)
     cats = set(agg["by_cat"].index.get_level_values(0).unique()) | set(agg["by_cat_cnt"].index.get_level_values(0).unique())
@@ -696,10 +936,11 @@ def compute_predicted_category_abc(clean_df, cat_name_map, a_thresh=70.0, b_thre
     for c in cats:
         sc = series_for(agg["by_cat_cnt"], periods, key=c)
         sq = series_for(agg["by_cat"], periods, key=c)
-        if len(sc) < test_len + 4:
-            continue
-        vc = fc_validate(sc, test_len)
-        vq = fc_validate(sq, test_len)
+        # 註：原本這裡有一行 `if len(sc) < test_len + 4: continue`。series_for() 一定回傳
+        # 長度等於 len(periods) 的陣列（該期沒出貨就補 0），而上面已經擋掉
+        # len(periods) < horizon + 4，所以該條件恆為 False，是永遠不會執行的死碼，已移除。
+        vc = fc_validate_multistep(sc, horizon, train_end)
+        vq = fc_validate_multistep(sq, horizon, train_end)
         rows.append({
             "cat": c, "name": category_label(c, cat_name_map), "material": cat_mat.get(c, "shelf"),
             "pred_cnt": sum(vc["pred"]), "pred_qty": sum(vq["pred"]),
@@ -725,39 +966,125 @@ def compute_predicted_category_abc(clean_df, cat_name_map, a_thresh=70.0, b_thre
     return {"shelf": shelf, "pallet": pallet, "a_thresh": a_thresh, "b_thresh": b_thresh, "periods": periods}
 
 
-def predicted_sku_values(clean_df):
-    """算「每個 SKU 最後一期預測值」這個較貴的部分（對每個候選 SKU 都要跑一次 fc_validate），
-    刻意跟依門檻分級（cls/share/cum）拆開，好讓呼叫端（router）可以把這段結果快取起來——
-    拉 ABC 門檻滑桿時不必重算預測，只有真的換了清洗結果才需要重跑（對應原 PRED_VALUES_CACHE）。
-    回傳 {shelf:[{id,name,cat,freq}], pallet:[...]} 或 {insufficient:True}。"""
+def _forecast_ctx(clean_df, recent_n=COLD_START_RECENT_N):
+    """配置用預測值的共同基準：期別（已排除尚未過完的末月）、基準期切點、預測區間、新品集合。
+
+    這四樣刻意跟需求預測頁（routers/forecast.py 的 _fc_base／_cold_start_ctx）取同一套函式
+    ——forecast_periods()／forecast_base_idx()／FC_TEST_MONTH／new_sku_set()——這樣「需求預測頁
+    上顯示的預測值」與「儲位配置拿來做 ABC 分級的預測值」才會是同一個東西，不會同一個 SKU
+    在兩頁看到兩個數字。資料期數不足以做多步驗證時回傳 None（呼叫端轉成 insufficient）。"""
     agg = compute_forecast_agg(clean_df, "month")
     if not agg or not agg["periods"]:
-        return {"insufficient": True}
-    periods = _predicted_periods(agg)
-    test_len = FC_TEST_MONTH
-    if len(periods) < test_len + 4:
-        return {"insufficient": True}
+        return None
+    periods = forecast_periods(agg, "month")
+    horizon = FC_TEST_MONTH
+    if len(periods) < horizon + 4:
+        return None
+    train_end = forecast_base_idx(periods, horizon)
+    agg2 = dict(agg, periods=periods)   # 新品判定要用「排除末月後」的期別，與驗證基準一致
+    return {
+        "agg": agg, "agg2": agg2, "periods": periods, "horizon": horizon,
+        "train_end": train_end, "recent_n": recent_n,
+        "sku_material": get_sku_material_map(clean_df),
+        "new_set": new_sku_set(agg2, recent_n, train_end),
+    }
 
-    sku_mat = get_sku_material_map(clean_df)
 
-    def build(material, total_series, series_map):
-        cand = [(sku, val) for sku, val in total_series.items() if sku_mat.get(sku, "shelf") == material]
+def _predict_sku_value(ctx, sku, series, analogue_median, material, cat):
+    """單一 SKU 的預測合計值（horizon 期相加）、是否為新品、是否需要彈性給位，共三項。
+
+    非新品：多步驗證 fc_validate_multistep()——站在基準期一次往後推 horizon 期，過程中看不到
+            測試期任何實際值，與需求預測頁 /api/forecast/series、/sku_top 用的是同一個函式。
+    新品  ：冷啟動類比預測 cold_start_predict()。新品的序列前面幾乎全是 0（series_for 會把
+            沒出貨的期補 0），直接餵時序選模會被這段零值前綴污染——MASE 分母失真、naive 只
+            抓最後一期、holt 把剛上市的短期成長線性外插，預測值不具參考價值。需求預測頁對
+            新品本來就改走冷啟動，配置用的預測值同樣照辦，兩邊才一致。
+
+    新品又分兩種，儲位配置上的處置完全不同（見 place_after 的彈性給位說明）：
+      1. 冷啟動水準取自「自身近期實際值」——訓練期內它自己就有出貨紀錄，只是期數不足以跑
+         時序選模。這個水準是真實觀測值、可信，它應該照這個預測值跟其他商品正常競爭儲位。
+      2. 冷啟動水準取自「同類別同區成熟品中位數」——訓練期內它完全沒有出貨，水準純粹是拿
+         同類商品猜的，沒有任何自身證據。這種才需要彈性給位、不佔黃金區。
+    第三個回傳值 needs_flex_slot 即代表第 2 種。"""
+    if sku in ctx["new_set"]:
+        lvl = analogue_median.get((cat, material), 0.0)
+        cs = cold_start_predict(series, ctx["horizon"], lvl, ctx["train_end"])
+        return sum(cs["pred"]), True, cs["source"] != COLD_START_SOURCE_OWN
+    v = fc_validate_multistep(series, ctx["horizon"], ctx["train_end"])
+    return sum(v["pred"]), False, False
+
+
+def predicted_sku_values(clean_df, recent_n=COLD_START_RECENT_N):
+    """算「每個 SKU 未來 horizon 期的預測合計」這個較貴的部分（每個 SKU 都要跑一次選模＋
+    多步預測），刻意跟依門檻分級（cls/share/cum）拆開，好讓呼叫端（router）可以把這段結果
+    快取起來——拉 ABC 門檻滑桿時不必重算預測，只有真的換了清洗結果才需要重跑
+    （對應原 PRED_VALUES_CACHE）。
+
+    貨架類依「預測揀貨次數」、棧板類依「預測出貨量」（貨架區重效率／棧板區重量體）；兩份
+    清單各自獨立排序與分級、分開顯示，不會互相混用單位。
+
+    母體只含「在實際用於預測的期別內有出貨」的 SKU（已排除尚未過完的末月），與需求預測頁
+    ／商品生命週期分類同一個母體。
+    回傳 {shelf:[{id,name,cat,freq,is_new}], pallet:[...], ...} 或 {insufficient:True}。"""
+    ctx = _forecast_ctx(clean_df, recent_n)
+    if ctx is None:
+        return {"insufficient": True}
+    agg = ctx["agg"]
+
+    def build(material, total_series, series_map, target):
+        analogue = analogue_levels(ctx["agg2"], ctx["sku_material"], target,
+                                   ctx["train_end"], ctx["new_set"])["median"]
+        cand = [(sku, val) for sku, val in total_series.items()
+                if ctx["sku_material"].get(sku, "shelf") == material]
         cand.sort(key=lambda kv: -kv[1])
         rows = []
         for sku, _ in cand:
-            s = series_for(series_map, periods, key=sku)
-            if len(s) < test_len + 4:
-                continue
-            v = fc_validate(s, test_len)
-            pr = sum(v["pred"])
+            s = series_for(series_map, ctx["periods"], key=sku)
             meta = agg["sku_meta"].get(sku, {})
-            rows.append({"id": sku, "name": meta.get("商品名稱"), "cat": meta.get("商品類別"), "freq": pr})
+            cat = meta.get("商品類別")
+            pr, is_new, flex = _predict_sku_value(ctx, sku, s, analogue, material, cat)
+            rows.append({"id": sku, "name": meta.get("商品名稱"), "cat": cat,
+                         "freq": pr, "is_new": is_new, "needs_flex_slot": flex})
         rows.sort(key=lambda x: -x["freq"])
         return rows
 
-    shelf = build("shelf", agg["sku_total_cnt"], agg["by_sku_cnt"])
-    pallet = build("pallet", agg["sku_total"], agg["by_sku"])
-    return {"shelf": shelf, "pallet": pallet}
+    # 母體用「實際用於預測的期別」內的出貨合計，而不是 agg 的整份資料累計，這樣 ABC 分級頁
+    # 的 SKU 檔數會和需求預測頁、商品生命週期分類一致（見 sku_totals_in_periods）。
+    shelf = build("shelf", sku_totals_in_periods(agg, ctx["periods"], "cnt"), agg["by_sku_cnt"], "cnt")
+    pallet = build("pallet", sku_totals_in_periods(agg, ctx["periods"], "qty"), agg["by_sku"], "qty")
+    return {"shelf": shelf, "pallet": pallet,
+            "horizon": ctx["horizon"], "n_periods": len(ctx["periods"]),
+            "recent_n": ctx["recent_n"],
+            "new_sku_count": sum(1 for r in shelf + pallet if r["is_new"]),
+            "flex_slot_count": sum(1 for r in shelf + pallet if r["needs_flex_slot"])}
+
+
+def predicted_sku_pick_counts(clean_df, recent_n=COLD_START_RECENT_N):
+    """全部 SKU 一律用「預測揀貨次數」的 {商品ID: 預測合計}，供儲位配置的 ABC 分級與距離
+    加權使用（見 sku_items_predicted_with_fallback）。
+
+    為什麼這裡不沿用 predicted_sku_values() 的「貨架看次數／棧板看量體」：那兩份清單是各自
+    獨立分級、獨立顯示的，單位不同沒有問題；但儲位配置會把全部 SKU 併成同一份清單，去算
+    類別 ABC 與「Σ(次數×距離)/Σ次數」的加權平均距離——把「揀貨次數」和「出貨件數」兩種單位
+    相加沒有意義。而儲位配置的目標函數就是「揀貨移動距離」，其權重本來就該是揀貨次數；
+    棧板區「重量體」的考量已經體現在材積分類（classify_storage 決定貨架/棧板）與分區
+    material 篩選上，不需要、也不該再混進距離權重裡。
+    回傳 {freq:{sku:值}, horizon, n_periods, new_set} 或 None（期數不足以做多步驗證）。"""
+    ctx = _forecast_ctx(clean_df, recent_n)
+    if ctx is None:
+        return None
+    agg = ctx["agg"]
+    analogue = analogue_levels(ctx["agg2"], ctx["sku_material"], "cnt",
+                               ctx["train_end"], ctx["new_set"])["median"]
+    out = {}
+    for sku in agg["sku_total_cnt"].index:
+        s = series_for(agg["by_sku_cnt"], ctx["periods"], key=sku)
+        meta = agg["sku_meta"].get(sku, {})
+        pr, _, _ = _predict_sku_value(ctx, sku, s, analogue,
+                                      ctx["sku_material"].get(sku, "shelf"), meta.get("商品類別"))
+        out[sku] = pr
+    return {"freq": out, "horizon": ctx["horizon"], "n_periods": len(ctx["periods"]),
+            "new_set": ctx["new_set"]}
 
 
 def classify_predicted_sku(pred_values, a_thresh=70.0, b_thresh=90.0):
@@ -787,6 +1114,56 @@ def compute_predicted_sku_by_zone(clean_df, a_thresh=70.0, b_thresh=90.0):
     """一次算完（不快取中間值）的版本，供不需要自行管理快取的呼叫端直接用
     （對應原 computePredictedSkuByZone）。"""
     return classify_predicted_sku(predicted_sku_values(clean_df), a_thresh, b_thresh)
+
+
+def sku_items_predicted_with_fallback(clean_df):
+    """「儲位配置」頁 ABC 分級與距離加權的基礎資料：改用預測值（每個 SKU 未來 horizon 期的
+    **預測揀貨次數**）而非實際歷史出貨次數，對應本專案「歷史資料 → 需求預測 → 用預測結果做
+    ABC／儲位配置」的設計目標。
+
+    為什麼全部用「揀貨次數」而不是貨架看次數／棧板看量體：見 predicted_sku_pick_counts()
+    的說明——儲位配置會把全部 SKU 併成同一份清單算類別 ABC 與加權平均距離，兩種單位相加
+    沒有意義，而距離的權重本來就該是揀貨次數。
+
+    新品（首次出貨落在基準期前 recent_n 期內）不會被排除，而是與需求預測頁一樣走冷啟動
+    類比預測（見 _predict_sku_value），所以每一個 SKU 都拿得到有意義的預測值。
+
+    仍會退回歷史值的只剩一種情況：該 SKU 出現在 sku_frequency()，但它的每一列都被
+    compute_forecast_agg() 濾掉（出貨日期無法解析、或訂購數量<=0），連時間序列都建不出來。
+    這時把它的歷史總次數**換算成同樣 horizon 期的水準**再頂替——歷史次數是整個資料期間
+    （可能十幾個月）的累計，預測值只涵蓋 horizon 期（3 個月），不換算就直接混在同一份清單裡
+    排序，這些列會被系統性高估好幾倍，平白擠進 A 級佔走黃金區。
+
+    若整份資料的期數本身就不足以做多步驗證，則全部退回實際歷史頻率（等同尚未導入預測、
+    維持原本行為，不讓頁面因此顯示不出結果）。
+
+    回傳形狀與 sku_frequency()["items"] 相同（含 id/freq/code/name/cat），另附 is_new 與
+    freq_source 兩個欄位供前端標示，可直接餵給 category_abc_from_sku()／
+    apply_abc_thresholds() 等既有下游函式沿用。"""
+    freq = sku_frequency(clean_df)
+    if not freq or not freq["items"]:
+        return freq
+
+    pred = predicted_sku_pick_counts(clean_df)
+    if not pred:
+        return freq
+    pred_freq = pred["freq"]
+    # 歷史累計次數 →「同 horizon 期水準」的換算比例
+    scale = (pred["horizon"] / pred["n_periods"]) if pred["n_periods"] else 1.0
+
+    items = []
+    for it in freq["items"]:
+        it2 = dict(it)
+        if it["id"] in pred_freq:
+            it2["freq"] = pred_freq[it["id"]]
+            it2["freq_source"] = "predicted"
+        else:
+            it2["freq"] = it["freq"] * scale
+            it2["freq_source"] = "history_scaled"
+        it2["is_new"] = it["id"] in pred["new_set"]
+        items.append(it2)
+    items.sort(key=lambda x: -x["freq"])
+    return {"items": items, "order_items": freq["order_items"], "total_orders": freq["total_orders"]}
 
 
 # ============================================================
@@ -834,7 +1211,16 @@ def compute_wh_assignment(clean_df, cat_name_map, zones, a_thresh=70.0, b_thresh
     freq = sku_frequency(clean_df)
     if not freq or not freq["items"]:
         return None
-    items = freq["items"]
+    # ABC 熱度分級／改善前類別配置改用「預測值」（本專案設計目標：歷史資料→需求預測→用
+    # 預測結果做 ABC／儲位配置分析），歷史月數不足以預測的 SKU（新品）自動退回用實際歷史
+    # 出貨次數頂替，確保每個 SKU 仍能被分級、分到儲位（見 sku_items_predicted_with_fallback
+    # 內部說明）。這樣一來「改善前 vs 改善後」的差異單純是配置精細度（按類別粗放配置 vs
+    # 按 SKU 熱度＋共同揀取關聯精細配置），不再混雜「歷史 vs 預測」這層差異。
+    # 注意：下面 freq 本身（含 order_items）原封不動保留給 sku_copick() 做「共同揀取」市場籃
+    # 分析——lift／support 是「實際歷史共同出現次數」的統計量，必須用真實歷史頻率才有意義，
+    # 不能也不該用預測值取代。
+    pred_freq = sku_items_predicted_with_fallback(clean_df)
+    items = (pred_freq or freq)["items"]
     apply_abc_thresholds(items, a_thresh, b_thresh)
 
     pallet_zones = [z for z in zones if z.get("material") == "pallet"]
@@ -863,7 +1249,17 @@ def compute_wh_assignment(clean_df, cat_name_map, zones, a_thresh=70.0, b_thresh
 
     pred = compute_predicted_sku_by_zone(clean_df, a_thresh, b_thresh)
     after_sku_zone = {}
+    after_sku_order = {}     # SKU → 擺放順序位次（位次相鄰＝儲位相鄰）
+    after_sku_cell = {}      # SKU → 該分區內的格子序號
+    cell_class = {}          # 分區代號 → {格子序號: 等級}，供前端逐格上色
     zone_items_class = {}
+
+    # 每個儲位格到出貨點的繞行距離（公尺），與前端配置圖用同一份幾何算出。
+    try:
+        from . import wh_geometry
+        cell_dists = wh_geometry.cell_distances()
+    except Exception:
+        cell_dists = {}
     sku_co = sku_copick(freq)
     cat_co = category_copick(clean_df, cat_name_map)
 
@@ -871,9 +1267,19 @@ def compute_wh_assignment(clean_df, cat_name_map, zones, a_thresh=70.0, b_thresh
         if not pred_arr or not zone_list:
             return
         zs = sorted(zone_list, key=lambda z: z.get("distance_m", 0))
-        a_items = [it for it in pred_arr if it["cls"] == "A"]
-        b_items = [it for it in pred_arr if it["cls"] == "B"]
-        c_items = [it for it in pred_arr if it["cls"] == "C"]
+        # 「暫定彈性給位」：不佔用黃金區（A/B 帶），改併入依類別群聚的 C 帶暫放，待累積
+        # 足夠歷史後隨實際表現重排——與商品查詢頁 _cold_start_card() 對使用者說明的處置一致。
+        # 先前那張卡片只是純顯示，實際配置仍把新品排進 A/B 帶，卡片寫著「不佔用黃金區」、
+        # 地圖上卻擺在黃金區，兩邊互相矛盾；這裡讓實際配置跟著照做。
+        #
+        # 條件是 needs_flex_slot 而不是 is_new：只有「訓練期內自己完全沒有出貨、水準純粹拿
+        # 同類商品猜」的新品才彈性給位。若新品在訓練期內就有自己的出貨紀錄（冷啟動水準取自
+        # 「自身近期實際值」），那是真實觀測值，它應該照預測值正常競爭儲位——實測把這種也
+        # 一併趕去 C 帶，KPI 距離改善率會從 64.1% 掉到 59.7%（多走 10.7 萬公尺），因為其中
+        # 不乏一上市就很熱、預測揀貨次數排進全體前 10% 的商品。
+        a_items = [it for it in pred_arr if it["cls"] == "A" and not it.get("needs_flex_slot")]
+        b_items = [it for it in pred_arr if it["cls"] == "B" and not it.get("needs_flex_slot")]
+        c_items = [it for it in pred_arr if it["cls"] == "C" or it.get("needs_flex_slot")]
         freq_of = {it["id"]: it["freq"] for it in pred_arr}
         ab_items_map = {it["id"]: it for it in (a_items + b_items)}
 
@@ -887,8 +1293,36 @@ def compute_wh_assignment(clean_df, cat_name_map, zones, a_thresh=70.0, b_thresh
         ab_clusters = cw_clusters(list(ab_items_map.keys()), ab_pairs)
         for g in ab_clusters:
             g.sort(key=lambda i: -freq_of.get(i, 0))
-        ab_clusters.sort(key=lambda g: -max((freq_of.get(i, 0) for i in g), default=0))
-        order_ab = [ab_items_map[i] for g in ab_clusters for i in g]
+
+        # 擺放順序：純 A →（混合群的 A 成員）｜（混合群的 B 成員）→ 純 B
+        #
+        # 若把「A/B 混合群聚」整群連在一起排，群內的 A 與 B 必然相鄰，一群接一群排下去
+        # 就會讓整條 A/B 交界帶變成紅橙交錯，看不出熱度由近而遠的分層。
+        # 改成把混合群「拆開跨在交界上」：A 成員併入 A 帶的末端、B 成員併入 B 帶的開頭，
+        # 且兩邊採鏡像順序（A 帶倒著放、B 帶正著放），於是同一群的 A 與 B 仍然隔著交界
+        # 緊鄰——共同揀取要的相鄰性沒有損失，但 A 帶只有 A、B 帶只有 B，色帶乾淨分層。
+        def _tier(g):
+            classes = {ab_items_map[i]["cls"] for i in g}
+            if classes == {"A"}:
+                return 0
+            if "A" in classes:
+                return 1
+            return 2
+
+        by_freq = lambda g: -max((freq_of.get(i, 0) for i in g), default=0)
+        pure_a = sorted([g for g in ab_clusters if _tier(g) == 0], key=by_freq)
+        mixed = sorted([g for g in ab_clusters if _tier(g) == 1], key=by_freq)
+        pure_b = sorted([g for g in ab_clusters if _tier(g) == 2], key=by_freq)
+
+        order_ab = [ab_items_map[i] for g in pure_a for i in g]
+        # 兩段都依「群內最高頻」由高到低排，熱門的仍然靠近出貨點；
+        # 因為 A 段緊接在交界之前、B 段緊接在交界之後，同一群的 A 與 B 只隔著交界，
+        # 距離差固定為「混合群數量」，仍然算相鄰擺放。
+        for g in mixed:
+            order_ab += [ab_items_map[i] for i in g if ab_items_map[i]["cls"] == "A"]
+        for g in mixed:
+            order_ab += [ab_items_map[i] for i in g if ab_items_map[i]["cls"] == "B"]
+        order_ab += [ab_items_map[i] for g in pure_b for i in g]
 
         by_cat = {}
         for it in c_items:
@@ -914,25 +1348,50 @@ def compute_wh_assignment(clean_df, cat_name_map, zones, a_thresh=70.0, b_thresh
                     order_c.append(it)
 
         order = order_ab + order_c
-        total_area = sum(_wh_area(z) for z in zs) or 1
+        # 記下每個 SKU 在「擺放順序」中的位次：同一群聚（共同揀取關聯）的商品會被排在連續
+        # 位次上，位次相鄰＝實體儲位相鄰。供商品查詢頁回答「關聯品有沒有被排在旁邊」。
+        for pos, it in enumerate(order):
+            after_sku_order[it["id"]] = pos
+
+        # ---- 逐「儲位格」發放（取代原本逐「分區」依面積配額發放）----
+        # 舊做法一個分區只用單一代表距離參與排序，整區拿到連續一段商品；但分區橫跨十幾公尺，
+        # 於是相鄰兩格明明距離幾乎相同，卻因分屬不同區而落到不同等級（R6 全 C、隔壁 R9 有 A/B）。
+        # 改成把同材質所有格子依「各自的繞行距離」跨區混排，商品依熱度順序一路發下去，
+        # 等級邊界就會沿著真實的距離等高線走，跨區也連續。
+        zone_ids = {z["id"] for z in zs}
+        slots = []          # (距離, 分區代號, 格子序號)
+        for code, arr in cell_dists.items():
+            if code in zone_ids:
+                for ci, d in enumerate(arr):
+                    slots.append((d, code, ci))
+        slots.sort(key=lambda s: s[0])
+
         n = len(order)
-        idx = 0
-        for zi, z in enumerate(zs):
-            quota = max(1, round(n * _wh_area(z) / total_area))
-            end = n if zi == len(zs) - 1 else min(n, idx + quota)
-            while idx < end:
-                it = order[idx]
-                after_sku_zone[it["id"]] = z["id"]
-                zc = zone_items_class.setdefault(z["id"], {"A": 0, "B": 0, "C": 0})
-                zc[it["cls"]] += 1
-                idx += 1
-        while idx < n:
-            it = order[idx]
-            z = zs[-1]
-            after_sku_zone[it["id"]] = z["id"]
-            zc = zone_items_class.setdefault(z["id"], {"A": 0, "B": 0, "C": 0})
-            zc[it["cls"]] += 1
-            idx += 1
+        if not slots or not n:
+            return
+        # 每個商品佔用「一段連續的格子」（它的儲位面積），而不是單一格：
+        # 商品數遠少於格子數，若一個商品只佔一格，整個倉庫會幾乎全空、也看不出配置意圖。
+        # 依序把格子由近到遠切成 n 段，第 i 熱的商品拿第 i 段——最熱的就在最靠近出貨點的位置，
+        # 且因為格子是「跨分區依實際距離混排」的，等級邊界會沿著距離等高線走。
+        total = len(slots)
+        for idx, it in enumerate(order):
+            start = idx * total // n
+            end = (idx + 1) * total // n if idx < n - 1 else total
+            if end <= start:
+                end = min(total, start + 1)
+            home_code, home_cell = slots[start][1], slots[start][2]
+            after_sku_zone[it["id"]] = home_code      # 以最靠近出貨點的那一格代表商品位置
+            after_sku_cell[it["id"]] = home_cell
+            # 地圖著色與分區統計要用「實際擺放等級」：彈性給位的商品被暫放在 C 帶，就照
+            # C 上色，否則 C 帶中間會冒出幾格 A 色、與它實際所在的位置不符。它的預測等級仍
+            # 完整保留在 sku_pred_cls（商品查詢頁顯示用），沒有被這裡蓋掉。
+            pcls = "C" if it.get("needs_flex_slot") else it["cls"]
+            for si in range(start, end):
+                _, code, ci = slots[si]
+                cell_class.setdefault(code, {})[ci] = pcls
+            # 一個商品的儲位可能橫跨相鄰分區，計數時只記在它的代表分區，避免重複灌水
+            zc = zone_items_class.setdefault(home_code, {"A": 0, "B": 0, "C": 0})
+            zc[pcls] += 1
 
     if pred and not pred.get("insufficient"):
         place_after(shelf_zones, pred["shelf"])
@@ -972,14 +1431,32 @@ def compute_wh_assignment(clean_df, cat_name_map, zones, a_thresh=70.0, b_thresh
     sku_info = {it["id"]: {"cat": it["cat"], "freq": it["freq"], "cls": it["cls"], "name": it["name"]}
                 for it in items}
     sku_pred_cls = {}
+    new_sku_ids = []
+    flex_slot_sku_ids = []
     if pred and not pred.get("insufficient"):
         for it in pred["shelf"] + pred["pallet"]:
             sku_pred_cls[it["id"]] = it["cls"]
+            if it.get("is_new"):
+                new_sku_ids.append(it["id"])
+            if it.get("needs_flex_slot"):
+                flex_slot_sku_ids.append(it["id"])
 
     return {
         "before_cat_zone": before_cat_zone, "after_sku_zone": after_sku_zone,
+        "after_sku_order": after_sku_order,
+        # 走冷啟動預測的新品清單，供前端在地圖／表格上標示。
+        "new_sku_ids": new_sku_ids,
+        # 其中「自身完全沒有出貨紀錄」而採彈性給位（暫放 C 帶、不佔黃金區）的子集合。
+        "flex_slot_sku_ids": flex_slot_sku_ids,
         "zone_before_cats": zone_before_cats, "zone_after_class": zone_after_class,
         "after_prop": after_prop, "sku_info": sku_info, "sku_pred_cls": sku_pred_cls,
+        # 每個分區實際被指派到的 A/B/C 商品「數量」（不只多數決後的單一級別）。
+        "zone_items_class": zone_items_class,
+        # 逐格等級：{分區代號: {格子序號: 'A'|'B'|'C'}}。前端配置圖直接依這份上色，
+        # 顏色即為實際指派結果，等級邊界會沿著真實距離等高線跨區連續。
+        "cell_class": cell_class,
+        "after_sku_cell": after_sku_cell,
+        "sku_copick": sku_co,
     }
 
 

@@ -24,29 +24,6 @@ def _pareto(items, n=220):
     return {"points": points, "a_pct": a_idx / total * 100, "b_pct": b_idx / total * 100}
 
 
-@router.get("/sku")
-def sku_abc(a_thresh: float = Query(70, ge=0, le=100), b_thresh: float = Query(90, ge=0, le=100),
-            limit: int = Query(200, ge=1, le=2000),
-            sess: state.SessionState = Depends(require_clean_result)):
-    if b_thresh < a_thresh:
-        raise HTTPException(status_code=400, detail="b_thresh 必須大於等於 a_thresh")
-    freq = sess.cached(("freq",), lambda: an.sku_frequency(sess.cleaning_result.clean_df))
-    if not freq:
-        return jsonsafe.clean({"items": [], "meta": None})
-    # apply_abc_thresholds 會「就地」在 items 上寫 share／cum／cls，而 freq 是快取的共用物件，
-    # 所以這裡先複製一份再分級，避免把不同門檻的結果寫進快取汙染其他端點。
-    items = [dict(it) for it in freq["items"]]
-    meta = an.apply_abc_thresholds(items, a_thresh, b_thresh)
-    a = sum(1 for i in items if i["cls"] == "A")
-    b = sum(1 for i in items if i["cls"] == "B")
-    c = len(items) - a - b
-    return jsonsafe.clean({
-        "items": items[:limit], "total_sku_count": len(items),
-        "class_counts": {"A": a, "B": b, "C": c}, "meta": meta,
-        "pareto": _pareto(items),
-    })
-
-
 @router.get("/category")
 def category_abc(a_thresh: float = Query(70, ge=0, le=100), b_thresh: float = Query(90, ge=0, le=100),
                   sess: state.SessionState = Depends(require_clean_result)):

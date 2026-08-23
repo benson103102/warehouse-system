@@ -5,7 +5,7 @@
     "section": "middle",
     "material": "pallet",
     "area_m2": 48.02,
-    "distance_m": 27.04
+    "distance_m": 31.41
   },
   {
     "id": "L10",
@@ -13,7 +13,7 @@
     "section": "lower",
     "material": "shelf",
     "area_m2": 13.73,
-    "distance_m": 30.2
+    "distance_m": 36.01
   },
   {
     "id": "L11",
@@ -21,7 +21,7 @@
     "section": "lower",
     "material": "shelf",
     "area_m2": 13.73,
-    "distance_m": 25.87
+    "distance_m": 35.81
   },
   {
     "id": "L12",
@@ -29,7 +29,7 @@
     "section": "lower",
     "material": "shelf",
     "area_m2": 7.65,
-    "distance_m": 32.52
+    "distance_m": 40.19
   },
   {
     "id": "L13",
@@ -37,7 +37,7 @@
     "section": "lower",
     "material": "shelf",
     "area_m2": 14.18,
-    "distance_m": 32.71
+    "distance_m": 41.75
   },
   {
     "id": "L14",
@@ -45,7 +45,7 @@
     "section": "lower",
     "material": "shelf",
     "area_m2": 12.15,
-    "distance_m": 35.32
+    "distance_m": 44.62
   },
   {
     "id": "L2",
@@ -53,7 +53,7 @@
     "section": "middle",
     "material": "pallet",
     "area_m2": 50.2,
-    "distance_m": 26.78
+    "distance_m": 28.56
   },
   {
     "id": "L3",
@@ -61,7 +61,7 @@
     "section": "middle",
     "material": "pallet",
     "area_m2": 15.75,
-    "distance_m": 8.91
+    "distance_m": 9.94
   },
   {
     "id": "L4",
@@ -69,7 +69,7 @@
     "section": "lower",
     "material": "pallet",
     "area_m2": 129.15,
-    "distance_m": 27.46
+    "distance_m": 27.28
   },
   {
     "id": "L5",
@@ -77,7 +77,7 @@
     "section": "lower",
     "material": "shelf",
     "area_m2": 18.9,
-    "distance_m": 37.32
+    "distance_m": 38.62
   },
   {
     "id": "L6",
@@ -85,7 +85,7 @@
     "section": "lower",
     "material": "shelf",
     "area_m2": 14.18,
-    "distance_m": 34.14
+    "distance_m": 32.86
   },
   {
     "id": "L7",
@@ -93,7 +93,7 @@
     "section": "lower",
     "material": "shelf",
     "area_m2": 13.73,
-    "distance_m": 22.68
+    "distance_m": 25.93
   },
   {
     "id": "L8",
@@ -101,7 +101,7 @@
     "section": "lower",
     "material": "shelf",
     "area_m2": 12.15,
-    "distance_m": 37.76
+    "distance_m": 48.4
   },
   {
     "id": "L9",
@@ -109,7 +109,7 @@
     "section": "lower",
     "material": "shelf",
     "area_m2": 14.18,
-    "distance_m": 35.62
+    "distance_m": 42.86
   },
   {
     "id": "R1",
@@ -117,7 +117,7 @@
     "section": "upper",
     "material": "shelf",
     "area_m2": 21.3,
-    "distance_m": 41.21
+    "distance_m": 57.97
   },
   {
     "id": "R10",
@@ -125,7 +125,7 @@
     "section": "upper",
     "material": "pallet",
     "area_m2": 18.83,
-    "distance_m": 16.8
+    "distance_m": 17.39
   },
   {
     "id": "R2",
@@ -133,7 +133,7 @@
     "section": "upper",
     "material": "shelf",
     "area_m2": 19.8,
-    "distance_m": 37.49
+    "distance_m": 51.58
   },
   {
     "id": "R3",
@@ -141,7 +141,7 @@
     "section": "upper",
     "material": "shelf",
     "area_m2": 19.8,
-    "distance_m": 33.94
+    "distance_m": 46.16
   },
   {
     "id": "R4",
@@ -149,7 +149,7 @@
     "section": "upper",
     "material": "pallet",
     "area_m2": 22.81,
-    "distance_m": 24.35
+    "distance_m": 34.37
   },
   {
     "id": "R5",
@@ -157,7 +157,7 @@
     "section": "upper",
     "material": "pallet",
     "area_m2": 109.73,
-    "distance_m": 28.23
+    "distance_m": 33.1
   },
   {
     "id": "R6",
@@ -165,7 +165,7 @@
     "section": "upper",
     "material": "pallet",
     "area_m2": 45.05,
-    "distance_m": 26.85
+    "distance_m": 27.31
   },
   {
     "id": "R7",
@@ -173,7 +173,7 @@
     "section": "upper",
     "material": "pallet",
     "area_m2": 12.87,
-    "distance_m": 35.52
+    "distance_m": 48.63
   },
   {
     "id": "R8",
@@ -181,7 +181,7 @@
     "section": "upper",
     "material": "pallet",
     "area_m2": 10.26,
-    "distance_m": 20.87
+    "distance_m": 26.68
   },
   {
     "id": "R9",
@@ -189,6 +189,6 @@
     "section": "upper",
     "material": "pallet",
     "area_m2": 168.82,
-    "distance_m": 27.56
+    "distance_m": 24.65
   }
 ]

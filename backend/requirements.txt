@@ -5,6 +5,8 @@ numpy>=1.26
 openpyxl>=3.1
 python-calamine>=0.2   # 強烈建議：正式資料集「訂單資料」工作表百萬列等級，openpyxl 讀取要 3~4 分鐘且會卡住整個伺服器；
                         # 裝了這個之後 ingest.py 會自動優先用它（Rust 實作，快很多）。裝不起來也沒關係，會自動退回 openpyxl。
+xlrd>=2.0               # 讀取舊版 .xls（二進位格式）用：openpyxl 不支援 .xls，calamine 讀取失敗或未安裝時
+                        # 的備援退回這個 engine（見 ingest.py _read_excel_robust，2026-08 追加 .xls 支援）。
 python-multipart>=0.0.9
 pydantic>=2.7
 google-cloud-storage>=2.10   # 大檔案直傳用（見 ingest.py /upload_url／/upload_from_gcs）：

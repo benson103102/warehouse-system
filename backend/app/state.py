@@ -34,6 +34,19 @@ _ZONES_PATH = os.path.join(os.path.dirname(__file__), "services", "zones_config.
 with open(_ZONES_PATH, encoding="utf-8") as _f:
     _DEFAULT_ZONES = json.load(_f)
 
+# distance_m 改由幾何檔即時算出（沿走道 BFS 的平均繞行距離），覆寫設定檔裡的靜態值。
+# 設定檔的數字曾經與畫面用的幾何對不起來（例如 R1 少算 17 公尺），造成熱度分級排序錯誤；
+# 改成同一份幾何算一次，前後端就不可能再不同步。幾何檔缺失時才沿用設定檔原值。
+try:
+    from .services import wh_geometry as _wh_geo
+
+    _ZONE_DIST = _wh_geo.zone_mean_distances()
+    for _z in _DEFAULT_ZONES:
+        if _z["id"] in _ZONE_DIST:
+            _z["distance_m"] = round(_ZONE_DIST[_z["id"]], 2)
+except Exception as _e:                                   # pragma: no cover - 僅在幾何檔缺失時
+    print(f"[warehouse] 幾何檔無法載入，distance_m 沿用 zones_config.json 靜態值：{_e}")
+
 store.init_db()
 
 
@@ -57,6 +70,14 @@ class SessionState:
         # 需求預測聚合、批次模擬…）算一次就存起來，之後切換篩選／拉滑桿直接重用，維持互動即時。
         # 清洗結果一換（cleaning_result setter／clear_clean）整份快取自動失效。詳見 cached()。
         self._analytics_cache = {}
+        # 「下載清洗結果」xlsx 背景產生狀態（純記憶體，不落地——重啟後重新匯出即可，
+        # 不需要跟 raw_df／cleaning_result 一樣保存）。百萬列等級資料寫 5 個工作表的 xlsx
+        # 實測要數十秒（改版前用 openpyxl 寫 xlsx 更要 481 秒），同步等待會讓瀏覽器卡住，
+        # 改成背景產生＋輪詢進度（見 routers/clean.py 的 /export/start、/export/status、
+        # /export/download）。
+        self.export_status = "idle"   # idle｜processing｜ready｜error
+        self.export_path = None
+        self.export_error = None
 
     @property
     def raw_df(self):
@@ -161,3 +182,13 @@ def clear_clean(sess: SessionState) -> None:
     sess._clean_loaded = True
     sess._has_clean = False
     sess._analytics_cache = {}   # 清洗結果沒了 → 分析快取一併清空
+    # 舊清洗結果的 xlsx 匯出檔（若有）已經對不上新結果，清掉暫存檔＋重置狀態，
+    # 避免使用者拿到舊資料、或磁碟留下用不到的暫存檔。
+    if sess.export_path and os.path.exists(sess.export_path):
+        try:
+            os.remove(sess.export_path)
+        except OSError:
+            pass
+    sess.export_status = "idle"
+    sess.export_path = None
+    sess.export_error = None

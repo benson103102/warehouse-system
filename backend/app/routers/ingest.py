@@ -42,7 +42,7 @@ import json
 import os
 import uuid
 from datetime import timedelta
-from typing import Optional
+from typing import Dict, Optional
 
 import pandas as pd
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
@@ -85,24 +85,35 @@ def _read_excel_sheet(content: bytes, engine: str) -> pd.DataFrame:
         raise
 
 
-def _read_excel_robust(content: bytes) -> pd.DataFrame:
-    """優先 calamine、失敗或未安裝才退回 openpyxl。對應原清洗腳本的 read_excel_robust()。"""
+def _read_excel_robust(content: bytes, filename: str) -> pd.DataFrame:
+    """優先 calamine（Rust 實作，.xlsx／.xlsm／.xls 都支援、速度快）；沒裝或讀取失敗時，
+    .xls（舊版二進位格式）退回 xlrd，其餘（.xlsx／.xlsm）退回 openpyxl——openpyxl 不支援
+    讀取 .xls，所以副檔名要分開處理，避免對 .xls 檔案誤用 openpyxl 導致必然失敗。
+    對應原清洗腳本的 read_excel_robust()（2026-08 追加 .xls 支援）。"""
     try:
         return _read_excel_sheet(content, engine="calamine")
     except ImportError:
-        pass  # 本機沒裝 python-calamine，退回 openpyxl
+        pass  # 本機沒裝 python-calamine，退回下面的備援 engine
     except Exception:
-        pass  # calamine 讀取失敗（罕見），也退回 openpyxl 再試一次
-    return _read_excel_sheet(content, engine="openpyxl")
+        pass  # calamine 讀取失敗（罕見），也退回下面的備援 engine 再試一次
+    fallback_engine = "xlrd" if filename.lower().endswith(".xls") else "openpyxl"
+    return _read_excel_sheet(content, engine=fallback_engine)
 
 
 def _read_upload(filename: str, content: bytes) -> pd.DataFrame:
     lower = filename.lower()
-    if lower.endswith((".xlsx", ".xlsm")):
-        return _read_excel_robust(content)
+    if lower.endswith((".xlsx", ".xlsm", ".xls")):
+        return _read_excel_robust(content, filename)
     if lower.endswith(".csv"):
         return pd.read_csv(io.BytesIO(content), dtype=object)
-    raise ValueError("僅支援 .xlsx／.xlsm／.csv 檔案")
+    raise ValueError("僅支援 .xlsx／.xlsm／.xls／.csv 檔案")
+
+
+def _suggest_mapping(cols):
+    """欄位對應下拉選單的預設選項：必要欄位若能在檔案欄位中找到完全相同（去除前後空白後）
+    的名稱，就直接建議對應到它；找不到就回傳 None，由使用者自行從下拉選單挑選。"""
+    col_set = set(cols)
+    return {req: (req if req in col_set else None) for req in ORDER_COLUMNS}
 
 
 def _preview(df: pd.DataFrame, n: int = 20):
@@ -114,6 +125,7 @@ def _preview(df: pd.DataFrame, n: int = 20):
         "row_count": int(len(df)),
         "missing_required_columns": missing,
         "preview_rows": head.values.tolist(),
+        "suggested_mapping": _suggest_mapping(cols),
     }
 
 
@@ -141,8 +153,8 @@ def _process_upload(session_id: str, upload_id: int, filename: str, content: byt
 
 def _start_processing(session_id: str, filename: str, content: bytes, background_tasks: BackgroundTasks) -> dict:
     """/upload 與 /upload_from_gcs 共用的「登記＋丟背景解析」流程，避免兩條路徑各寫一份。"""
-    if not filename.lower().endswith((".xlsx", ".xlsm", ".csv")):
-        raise HTTPException(status_code=400, detail="僅支援 .xlsx／.xlsm／.csv 檔案")
+    if not filename.lower().endswith((".xlsx", ".xlsm", ".xls", ".csv")):
+        raise HTTPException(status_code=400, detail="僅支援 .xlsx／.xlsm／.xls／.csv 檔案")
     if not content:
         raise HTTPException(status_code=400, detail="檔案是空的")
 
@@ -173,8 +185,8 @@ def _start_processing(session_id: str, filename: str, content: bytes, background
 async def upload(background_tasks: BackgroundTasks, file: UploadFile = File(...),
                   session_id: str = Depends(get_session_id)):
     filename = file.filename or ""
-    if not filename.lower().endswith((".xlsx", ".xlsm", ".csv")):
-        raise HTTPException(status_code=400, detail="僅支援 .xlsx／.xlsm／.csv 檔案")
+    if not filename.lower().endswith((".xlsx", ".xlsm", ".xls", ".csv")):
+        raise HTTPException(status_code=400, detail="僅支援 .xlsx／.xlsm／.xls／.csv 檔案")
     content = await file.read()
     return _start_processing(session_id, filename, content, background_tasks)
 
@@ -197,8 +209,8 @@ def create_upload_url(payload: UploadUrlRequest, session_id: str = Depends(get_s
         raise HTTPException(status_code=501, detail="伺服器尚未設定 WAREHOUSE_UPLOAD_BUCKET 環境變數，"
                                                       "無法使用大檔案直傳（請改用一般上傳，或參考部署教學設定）")
     filename = payload.filename or ""
-    if not filename.lower().endswith((".xlsx", ".xlsm", ".csv")):
-        raise HTTPException(status_code=400, detail="僅支援 .xlsx／.xlsm／.csv 檔案")
+    if not filename.lower().endswith((".xlsx", ".xlsm", ".xls", ".csv")):
+        raise HTTPException(status_code=400, detail="僅支援 .xlsx／.xlsm／.xls／.csv 檔案")
 
     # 路徑帶上 session_id：一來檔案彼此不會互相覆蓋，二來 /upload_from_gcs 可以用這個前綴
     # 確認「這個物件真的是這位登入者自己上傳的」，避免有人猜物件名稱去讀別人上傳的檔案。
@@ -280,6 +292,67 @@ def load_sample(session_id: str = Depends(get_session_id)):
     return jsonsafe.clean({"filename": sess.raw_filename, "status": "ready", **_preview(df)})
 
 
+class MappingRequest(BaseModel):
+    # {必要欄位名稱: 使用者選的檔案欄位名稱}；沒有要指定的必要欄位可以省略，或給 None／空字串
+    # （代表「不對應」，維持原樣，該必要欄位若本來就缺，仍會缺）。
+    mapping: Dict[str, Optional[str]]
+
+
+@router.post("/mapping")
+def apply_mapping(payload: MappingRequest, session_id: str = Depends(get_session_id)):
+    """套用使用者手動調整過的欄位對應：把匯入檔案裡實際的欄位名稱，改名成清洗腳本
+    （P零售物流data_清洗腳本.py）認得的 18 個固定必要欄位名稱，下游的清洗／儲位配置／
+    批次併單／儲位模擬完全不用改，因為它們看到的欄位名稱從此就是標準名稱。
+
+    對應改變等於原始資料的欄位結構變了，先前的清洗結果（若有）已不再適用，這裡跟
+    /api/ingest/upload 換新檔案時一樣清掉，需重新呼叫 /api/clean/run。"""
+    sess = state.get_session(session_id)
+    if sess.raw_df is None:
+        raise HTTPException(status_code=400, detail="尚未匯入資料，請先上傳檔案或載入範例資料")
+
+    df = sess.raw_df
+    # 前端下拉選單的選項來自 _preview() 回傳的 columns（已用 str(c).strip() 去頭尾空白），
+    # 但這裡原本直接拿 df.columns（未去空白）去比對，欄位名稱若帶有前後空白（Excel／CSV
+    # 常見），字串就對不起來，導致明明畫面上顯示的名稱一樣，卻報「檔案中找不到欄位」。
+    # 改成同樣用去空白後的名稱來比對，並記住對回原始（未去空白）欄名，rename 才會作用在
+    # 真正存在的欄位上。
+    stripped_to_actual: Dict[str, str] = {}
+    for c in df.columns:
+        key = str(c).strip()
+        stripped_to_actual.setdefault(key, c)  # 同名重複時取第一個，避免任意覆蓋
+
+    rename: Dict[str, str] = {}
+    used_sources = set()
+    for req_col, src_col in payload.mapping.items():
+        if req_col not in ORDER_COLUMNS:
+            raise HTTPException(status_code=400, detail=f"不是有效的必要欄位：{req_col}")
+        if not src_col:
+            continue  # 使用者選「（未對應）」：略過，維持原樣
+        actual_col = stripped_to_actual.get(str(src_col).strip())
+        if actual_col is None:
+            raise HTTPException(status_code=400, detail=f"檔案中找不到欄位：{src_col}")
+        if actual_col in used_sources:
+            raise HTTPException(status_code=400,
+                                 detail=f"同一個檔案欄位（{src_col}）不能同時對應到多個必要欄位")
+        used_sources.add(actual_col)
+        rename[actual_col] = req_col
+
+    # 若某個必要欄位名稱本身已存在於原始檔案中、但這次使用者選了「別的」檔案欄位對應過去，
+    # 要先把那個舊的同名欄位丟掉，改名後才不會出現兩欄同名（pandas 允許但下游會取到錯的那欄）。
+    drop_cols = [req for req in rename.values() if req in df.columns and req not in rename]
+    if drop_cols:
+        df = df.drop(columns=drop_cols)
+    df = df.rename(columns=rename)
+
+    sess.raw_df = df
+    state.persist_raw(sess)
+    state.clear_clean(sess)
+    sess.status = "ready"
+    state.persist_meta(sess)
+
+    return jsonsafe.clean(_preview(df))
+
+
 @router.get("/status")
 def status(session_id: str = Depends(get_session_id)):
     sess = state.get_session(session_id)
@@ -291,11 +364,3 @@ def status(session_id: str = Depends(get_session_id)):
         resp.update(_preview(sess.raw_df))
     # status == "idle" 或 "processing" 時就只回上面兩個欄位，前端據此顯示對應訊息。
     return jsonsafe.clean(resp)
-
-
-@router.get("/uploads")
-def uploads(session_id: str = Depends(get_session_id)):
-    """列出這個 session 上傳過的所有檔案（檔名、大小、列數、狀態、時間）。
-    對應「系統能記錄他們的檔案」——重啟後仍查得到，因為紀錄存在 SQLite。"""
-    sess = state.get_session(session_id)
-    return jsonsafe.clean({"uploads": store.list_uploads(sess.session_id)})
