@@ -15,3 +15,6 @@ backend/data/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# === 大型原始資料檔（真實業務資料，不應該進版控）===
+P零售物流data.xlsx
