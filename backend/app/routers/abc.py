@@ -25,7 +25,7 @@ def _pareto(items, n=220):
 
 
 @router.get("/category")
-def category_abc(a_thresh: float = Query(70, ge=0, le=100), b_thresh: float = Query(90, ge=0, le=100),
+def category_abc(a_thresh: float = Query(80, ge=0, le=100), b_thresh: float = Query(95, ge=0, le=100),
                   sess: state.SessionState = Depends(require_clean_result)):
     if b_thresh < a_thresh:
         raise HTTPException(status_code=400, detail="b_thresh 必須大於等於 a_thresh")
@@ -38,7 +38,7 @@ def category_abc(a_thresh: float = Query(70, ge=0, le=100), b_thresh: float = Qu
 
 
 @router.get("/predicted_category")
-def predicted_category_abc(a_thresh: float = Query(70, ge=0, le=100), b_thresh: float = Query(90, ge=0, le=100),
+def predicted_category_abc(a_thresh: float = Query(80, ge=0, le=100), b_thresh: float = Query(95, ge=0, le=100),
                             sess: state.SessionState = Depends(require_clean_result)):
     """對應原前端 computePredictedCategoryAbc()／renderPredictedAbc()：用「預測值」而非歷史值
     做 ABC 分級——貨架類商品依預測揀貨次數排、棧板類依預測出貨量排。"""
@@ -54,7 +54,7 @@ def predicted_category_abc(a_thresh: float = Query(70, ge=0, le=100), b_thresh: 
 
 
 @router.get("/predicted_sku")
-def predicted_sku_abc(a_thresh: float = Query(70, ge=0, le=100), b_thresh: float = Query(90, ge=0, le=100),
+def predicted_sku_abc(a_thresh: float = Query(80, ge=0, le=100), b_thresh: float = Query(95, ge=0, le=100),
                        top_n: int = Query(15, ge=1, le=200),
                        sess: state.SessionState = Depends(require_clean_result)):
     """對應原前端 computePredictedSkuByZone()／renderPredictedSkuAbc()。predicted_sku_values()

@@ -14,7 +14,7 @@
     --page-plane:     #f5f1e8;
     --text-primary:   #20293a;
     --text-secondary: #5b5346;
-    --text-muted:     #9a927f;
+    --text-muted:     #5b5346;
     --gridline:       #f1ece0;
     --baseline:       #e7e2d4;
     --border:         #efe9db;
@@ -52,7 +52,7 @@
     --page-plane:     #0d0d0d;
     --text-primary:   #ffffff;
     --text-secondary: #c3c2b7;
-    --text-muted:     #898781;
+    --text-muted:     #c3c2b7;
     --gridline:       #2c2c2a;
     --baseline:       #383835;
     --border:         rgba(255,255,255,0.10);
@@ -154,9 +154,17 @@
   section.screen.active{ display:block; }
   @keyframes fadein{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;} }
 
-  .page-head{ margin-bottom:18px; }
-  .page-head h1{ font-size:24px; margin:0 0 4px; font-weight:800; color:var(--text-primary); }
-  .page-head p{ font-size:15px; color:var(--text-muted); margin:0; max-width:760px; line-height:1.6;}
+  .page-head{ margin-bottom:28px; display:grid; grid-template-columns:auto 1fr; grid-template-rows:auto auto;
+              column-gap:8px; align-items:start; position:relative; z-index:1; }
+  .page-head h1{ grid-column:2; grid-row:1; font-size:24px; margin:0 0 4px; font-weight:800; color:var(--text-primary); }
+  .page-head p{ grid-column:2; grid-row:2; font-size:15px; color:var(--text-muted); margin:0; max-width:760px; line-height:1.6;}
+
+  /* 頁首小圖示：放在標題左邊、小小一個就好（不跨到說明文字那一列），--ph-tone 由各頁行內指定 */
+  .ph-emblem{ grid-column:1; grid-row:1; width:24px; height:24px; border-radius:7px; flex:none; margin-top:2px;
+              display:flex; align-items:center; justify-content:center;
+              background: color-mix(in srgb, var(--ph-tone, var(--accent-navy)) 16%, var(--surface-1));
+              box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ph-tone, var(--accent-navy)) 32%, transparent); }
+  .ph-emblem svg{ stroke: var(--ph-tone, var(--accent-navy)); width:14px; height:14px; }
 
   .grid{ display:grid; gap:14px; }
   .grid-2{ grid-template-columns: 1fr 1fr; }
@@ -174,8 +182,13 @@
   .card{
     background: var(--surface-1); border:none; border-radius:22px;
     padding:18px 20px; box-shadow: var(--shadow-warm);
+    transition: box-shadow .18s ease, transform .18s ease;
   }
+  .card:hover{ box-shadow: var(--shadow-warm-lg); transform: translateY(-3px); }
   .card h3{ font-size:16px; margin:0 0 3px; font-weight:800; color:var(--text-primary); }
+  /* 小節標題色條：比照既有 .audit-head 的做法，延伸到所有卡片標題 */
+  .card > h3::before, .logic-card > h3::before{ content:''; display:inline-block; width:3px; height:14px;
+              border-radius:2px; background:var(--series-1); margin-right:8px; vertical-align:-2px; }
   .card .card-sub{ font-size:13px; color:var(--text-muted); margin:0 0 12px; }
   .card + .card:not(.audit-block){ margin-top:0; }
 
@@ -189,6 +202,21 @@
   .stat-tile .meter-fill{ height:7px; border-radius:100px; background: var(--series-1); transition: width .5s ease;}
   .stat-tile .meter-target{ position:absolute; top:-3px; width:2px; height:12px; background: var(--text-primary); opacity:.4; }
   .stat-tile .meter-labels{ display:flex; justify-content:space-between; font-size:12px; color:var(--text-muted); margin-top:4px;}
+
+  /* KPI 儀表板頂部三張大字卡片：帶狀態色（達標＝綠／未達＝紅）＋左側色條＋圖示徽章，
+     取代原本純白卡片＋純文字顏色，遠看也能分辨達標狀況 */
+  .hero-tile{ position:relative; border-radius:22px; padding:16px 18px 16px 20px; box-shadow:var(--shadow-warm);
+              background: color-mix(in srgb, var(--tone) 7%, var(--surface-1)); overflow:hidden;
+              transition: box-shadow .18s ease, transform .18s ease; }
+  .hero-tile:hover{ box-shadow: var(--shadow-warm-lg); transform: translateY(-3px); }
+  .hero-tile::before{ content:''; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--tone); }
+  .hero-tile .h-icon{ width:28px; height:28px; border-radius:9px; display:flex; align-items:center; justify-content:center;
+              font-size:14px; background: color-mix(in srgb, var(--tone) 18%, var(--surface-1)); margin-bottom:8px; }
+  .hero-tile .label{ font-size:13px; color:var(--text-secondary); font-weight:700; }
+  .hero-tile .value{ font-size:32px; font-weight:800; margin-top:6px; letter-spacing:-0.01em; color:var(--tone); }
+  .hero-tile .delta{ font-size:14px; font-weight:800; margin-top:5px; color:var(--tone); }
+  .hero-tile.ok{ --tone: var(--success-text); }
+  .hero-tile.bad{ --tone: var(--critical); }
 
   /* KPI 改善前後比較：每項指標一個區塊，改善前／改善後各畫一條橫向長條，長度比例＝實際數值大小，
      一眼就看得出來縮短了多少，比單一 bar chart 更直覺，管理層不用先猜單位就能看懂。 */
@@ -227,8 +255,11 @@
     border:2px dashed var(--baseline); border-radius:18px; padding:34px 20px; text-align:center;
     background: var(--surface-2); cursor:pointer; transition: border-color .15s, background .15s;
   }
+  .dropzone:hover{ border-color: color-mix(in srgb, var(--series-1) 45%, var(--baseline)); background: color-mix(in srgb, var(--series-1) 3%, var(--surface-2)); }
   .dropzone.drag{ border-color: var(--series-1); background: color-mix(in srgb, var(--series-1) 6%, var(--surface-2)); }
-  .dropzone .dz-icon{ font-size:30px; margin-bottom:8px; }
+  .dropzone .dz-icon{ width:44px; height:44px; border-radius:50%; margin:0 auto 10px; display:flex; align-items:center; justify-content:center;
+              background: color-mix(in srgb, var(--accent-navy) 9%, var(--surface-1)); }
+  .dropzone .dz-icon svg{ stroke: var(--accent-navy); }
   .dropzone .dz-title{ font-size:15.5px; font-weight:700; margin-bottom:3px;}
   .dropzone .dz-sub{ font-size:13px; color:var(--text-muted); }
   .val-unit{ font-size:12.5px; font-weight:600; color:var(--text-muted); margin-left:3px; }
@@ -301,7 +332,8 @@
   input[type=range]{ width:100%; accent-color: var(--series-1); height:4px; }
 
   .tabbar{ display:inline-flex; gap:4px; background:#eee8d9; border-radius:100px; padding:4px; margin-bottom:16px; border-bottom:none; }
-  .tabbtn{ padding:9px 18px; font-size:14.5px; font-weight:700; color:var(--text-secondary); background:none; border:none; border-radius:100px; cursor:pointer; margin-bottom:0; }
+  .tabbtn{ padding:9px 18px; font-size:14.5px; font-weight:700; color:var(--text-secondary); background:none; border:none; border-radius:100px; cursor:pointer; margin-bottom:0;
+           transition: background .18s ease, color .18s ease, box-shadow .18s ease; }
   .tabbtn.active{ color:var(--text-primary); background:var(--surface-1); box-shadow:var(--shadow-warm); }
 
   .legend-row{ display:flex; gap:16px; flex-wrap:wrap; margin-top:10px; font-size:13px; color:var(--text-secondary); }
@@ -356,8 +388,19 @@
   .param-radio input:checked + span{ color: var(--series-1); }
   .param-radio label:has(input:checked){ border-color: var(--series-1); background: color-mix(in srgb, var(--series-1) 10%, var(--surface-2)); }
 
-  .scenario-table td, .scenario-table th{ text-align:center; }
-  .scenario-table td:first-child, .scenario-table th:first-child{ text-align:left; }
+  /* 情境敏感度分析改用 CSS Grid（而非 <table>）排版：表頭與每一列資料都是同一個 grid 容器
+     裡的直接子項，共用同一組 grid-template-columns 欄軌，天生保證每欄上下對齊，跟表格欄寬
+     計算演算法無關，滿版寬度時也不會跑掉。.sg-row 用 display:contents 讓「列」只是邏輯分組
+     （方便整列 hover 反白），不會多插入一層真正佔版面的容器打斷 grid 欄位對齊。 */
+  .scenario-grid{ display:grid; grid-template-columns: 1.7fr 1fr 1fr 1fr; width:100%; }
+  .sg-row{ display:contents; }
+  .sg-cell{ padding:8px 9px; border-bottom:1px solid var(--gridline); display:flex; flex-direction:column;
+            align-items:center; justify-content:center; text-align:center; }
+  .sg-cell.sg-label{ align-items:flex-start; text-align:left; }
+  .sg-row:hover .sg-cell{ background: var(--page-plane); }
+  .sg-head .sg-cell{ font-weight:700; color:var(--text-muted); border-bottom:2px solid var(--gridline);
+            padding-top:0; align-items:center; }
+  .sg-head .sg-cell:first-child{ align-items:flex-start; }
   .badge-scenario{ font-size:12px; font-weight:700; padding:2px 8px; border-radius:100px;}
   .footnote{ font-size:12.5px; color:var(--text-muted); margin-top:10px; line-height:1.6;}
 
@@ -366,7 +409,8 @@
   ::-webkit-scrollbar-track{ background: transparent; }
 
   .subtabbar{ display:inline-flex; gap:4px; margin-bottom:12px; background:#eee8d9; border-radius:100px; padding:3px; }
-  .subtabbtn{ padding:7px 14px; font-size:13px; font-weight:700; color:var(--text-secondary); background:none; border:none; border-radius:100px; cursor:pointer; }
+  .subtabbtn{ padding:7px 14px; font-size:13px; font-weight:700; color:var(--text-secondary); background:none; border:none; border-radius:100px; cursor:pointer;
+              transition: background .18s ease, color .18s ease; }
   .subtabbtn.active{ background:var(--accent-navy); color:var(--accent-yellow); border-color:transparent; }
   .section-note{ font-size:13px; color:var(--text-muted); margin-top:8px; line-height:1.7; }
   details.cat-table summary{ cursor:pointer; font-weight:700; font-size:14.5px; padding:4px 0; }
@@ -374,7 +418,9 @@
   .audit-head{ margin-top:22px; margin-bottom:8px; font-size:15px; font-weight:700; color:var(--text-secondary); display:flex; align-items:center; gap:8px; }
   .audit-head::before{ content:''; width:3px; height:14px; border-radius:2px; background:var(--series-1); display:inline-block; }
   details.audit-block{ margin-top:16px; }
-  details.audit-block > summary{ cursor:pointer; list-style:none; display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+  details.audit-block > summary{ cursor:pointer; list-style:none; display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
+              margin:-6px -8px; padding:6px 8px; border-radius:12px; transition: background .12s ease; }
+  details.audit-block > summary:hover{ background: var(--surface-2); }
   details.audit-block > summary::-webkit-details-marker{ display:none; }
   details.audit-block > summary::before{ content:'▸'; color:var(--text-muted); font-size:12.5px; align-self:center; }
   details.audit-block[open] > summary::before{ content:'▾'; }
@@ -395,7 +441,7 @@
   .zero-rule-row:last-child{ border-bottom:none; }
   /* 材積清洗／配送地址：加強數字與標籤視覺區隔 */
   #materialSummary .kv, #addressSummary .kv{ padding:9px 0; align-items:flex-start; gap:14px; }
-  #materialSummary .kv .k, #addressSummary .kv .k{ line-height:1.55; }
+  #materialSummary .kv .k, #addressSummary .kv .k, #reclassSummary .kv .k{ line-height:1.55; font-weight:600; color:var(--text-primary); }
   #materialSummary .kv .v, #addressSummary .kv .v{ font-size:16px; font-weight:800; color:var(--text-primary); white-space:nowrap; }
   .mini-kv-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
   @media(max-width:1000px){ .mini-kv-grid{grid-template-columns:repeat(2,1fr);} }
@@ -418,7 +464,10 @@
   --seq-4: var(--seq-450); --seq-5: var(--seq-550); --seq-6: var(--seq-650);
   --warn: var(--warning); --bad: var(--critical);
 }
-.empty{ padding:26px; text-align:center; color:var(--text-muted); font-size:14.5px; }
+.empty{ padding:30px 26px; text-align:center; color:var(--text-muted); font-size:14.5px; }
+.empty .empty-icon{ width:34px; height:34px; border-radius:50%; background:var(--surface-2); border:1.5px solid var(--border);
+            display:flex; align-items:center; justify-content:center; margin:0 auto 10px; }
+.empty .empty-icon svg{ stroke:var(--text-secondary); }
 .ok-text{ color: var(--success-text); } .bad-text{ color: var(--critical); }
 .wh-legend{ display:flex; flex-wrap:wrap; gap:14px; font-size:14px; color:var(--text-secondary); margin-top:10px; }
 .wh-legend .sw{ display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:5px; vertical-align:-1px; }
@@ -444,7 +493,9 @@
 
   /* ===== 優化邏輯圖（總覽）：沿用主站 --series-*／--surface-*／--critical 等變數，卡片外觀對齊 .card ===== */
   .logic-card{ background:var(--surface-1); border:none; border-radius:22px;
-               padding:20px 22px 24px; box-shadow:var(--shadow-warm); }
+               padding:20px 22px 24px; box-shadow:var(--shadow-warm);
+               transition: box-shadow .18s ease, transform .18s ease; }
+  .logic-card:hover{ box-shadow: var(--shadow-warm-lg); transform: translateY(-3px); }
   .logic-card > h3{ margin:0 0 3px; font-size:16px; font-weight:800; color:var(--text-primary); }
   .logic-card > .sub{ margin:0 0 18px; font-size:13px; color:var(--text-muted); line-height:1.6; }
 
@@ -459,11 +510,11 @@
   .lg-now .now-main b{ color:var(--series-1); }
   .lg-now .arrow-inline{ color:var(--text-muted); font-weight:700; }
   .lg-pains{ margin-left:auto; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  /* 原因（前兩個）用中性灰底，只有結果（總揀貨工時居高不下）用實心紅色，因果一眼看出來 */
   .pain-chip{ font-size:13px; font-weight:700; padding:5px 11px; border-radius:100px;
-              background:color-mix(in srgb, var(--critical) 13%, transparent); color:var(--critical);
-              border:1px solid color-mix(in srgb, var(--critical) 30%, transparent); }
+              background:var(--surface-1); color:var(--text-secondary); border:1px solid var(--border); }
   .pain-arrow{ font-size:13px; color:var(--text-muted); font-weight:700; }
-  .pain-chip.hi{ background:color-mix(in srgb, var(--critical) 22%, transparent); }
+  .pain-chip.hi{ background:var(--critical); color:#fff; border-color:var(--critical); font-weight:800; }
 
   /* 垂直連接箭頭 */
   .lg-down{ display:flex; justify-content:center; padding:10px 0; }
@@ -633,6 +684,7 @@
 
     <section class="screen" id="screen-overview" data-title="總覽" data-desc="專案目標與作業流程">
       <div class="page-head">
+        <div class="ph-emblem" style="--ph-tone:var(--accent-yellow);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h7v7H4z"/><path d="M13 4h7v4h-7z"/><path d="M13 10h7v10h-7z"/><path d="M4 13h7v7H4z"/></svg></div>
         <h1>儲位配置與揀貨策略優化系統</h1>
         <p>將門市出貨訂單資料匯入後，依序完成資料清洗、需求預測、ABC 熱度分級與共同揀取分析、批次併單模擬，最終以 KPI 儀表板呈現改善前後成果。整體邏輯呼應「需求預測 → 儲位配置 → 最佳揀貨」的倉儲作業優化思路：先由歷史出貨量預估未來需求走勢，再據此調整熱門商品的儲位與揀貨策略。</p>
       </div>
@@ -664,7 +716,7 @@
         <div class="lg-down"><span>&#8595;</span></div>
 
         <!-- 兩大優化軸 -->
-        <div class="lg-stage-label">兩大優化手段（並行）</div>
+        <div class="lg-stage-label numbered"><span class="lg-step-badge">2</span> 兩大優化手段（並行）</div>
         <div class="lg-tracks">
 
           <!-- 軸 A：儲位配置優化 -->
@@ -718,7 +770,7 @@
         <div class="lg-down"><span>&#8595;</span></div>
 
         <!-- 綜效匯流 -->
-        <div class="lg-stage-label">綜效（最終效益）</div>
+        <div class="lg-stage-label numbered"><span class="lg-step-badge">3</span> 綜效（最終效益）</div>
         <div class="lg-merge">
           <div class="gain">
             <span class="g-metric">揀貨距離</span>
@@ -776,7 +828,7 @@
         <p class="card-sub">模擬結果僅供方案比較與投資評估參考</p>
         <ul style="margin:0; padding-left:18px; font-size:14px; color:var(--text-secondary); line-height:2;">
           <li>本階段不串接 ERP／WMS，不進行即時庫存扣帳</li>
-          <li>無實際 SKU儲位、儲位容量與走道距離資料，以基準情境模擬</li>
+          <li>無實際商品儲位、儲位容量與走道距離資料，以基準情境模擬</li>
           <li>人工數量、速度、處理時間採可調參數，非實測值</li>
           <li>相同資料與參數下，模擬結果可重複產生</li>
         </ul>
@@ -790,6 +842,7 @@
     <!-- ================= 1. IMPORT ================= -->
     <section class="screen" id="screen-import" data-title="資料匯入" data-desc="匯入 xlsx／csv 並檢查欄位格式">
       <div class="page-head">
+        <div class="ph-emblem" style="--ph-tone:var(--accent-navy);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10"/><path d="M8 10l4 4 4-4"/><path d="M5 18h14"/></svg></div>
         <h1>1｜資料匯入</h1>
         <p>拖曳或選擇門市出貨訂單檔（.xlsx／.xls／.csv）；系統將自動偵測欄位、資料型別與缺漏比例。若尚未備妥檔案，可先載入個案範例資料體驗流程。</p>
       </div>
@@ -799,7 +852,7 @@
           <h3>上傳檔案</h3>
           <p class="card-sub">支援 .xlsx / .xlsm / .xls / .csv，檔案會上傳到後端伺服器解析（僅供這個帳號的 session 使用，不會分享給其他使用者）</p>
           <div class="dropzone" id="dropzone">
-            <div class="dz-icon">📄</div>
+            <div class="dz-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 20h16"/></svg></div>
             <div class="dz-title">拖放檔案到此處，或點擊選擇</div>
     
           </div>
@@ -858,6 +911,7 @@
     <!-- ================= 2. CLEAN ================= -->
     <section class="screen" id="screen-clean" data-title="資料清洗" data-desc="8條隔離規則、關鍵字重分類">
       <div class="page-head">
+        <div class="ph-emblem" style="--ph-tone:var(--accent-navy-2);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8.5V19l-4 2v-7.5z"/></svg></div>
         <h1>2｜資料清洗</h1>
         <p>系統將匯入的原始訂單逐列做品質檢查與標準化：自動分流為「乾淨資料」與「隔離資料」，並補齊缺值、重新分類商品類別、清洗材積並判定貨架／棧板儲位、補齊配送地址的縣市／區域。清洗後的乾淨資料即為後續需求預測、ABC 分級與儲位配置的共同基礎。</p>
       </div>
@@ -966,8 +1020,9 @@
     <!-- ================= 3. FORECAST ================= -->
     <section class="screen" id="screen-forecast" data-title="需求預測" data-desc="週／月需求時間序列預估">
       <div class="page-head">
+        <div class="ph-emblem" style="--ph-tone:var(--series-7);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-5 4 4 8-9"/><path d="M15 7h5v5"/></svg></div>
         <h1>3｜需求預測</h1>
-        <p>依清洗後歷史出貨資料，以月為單位彙總各商品類別／SKU 的出貨量，採<b>多步驗證</b>：固定一個「基準期」，站在該期一次往後推 1～3 期，過程中<b>完全不看測試期的實際值</b>，再與實際值比對，並由系統自動為每個序列選出誤差最低的模型。驗證後的需求可作為 ABC 分級、儲位配置與採購備貨的依據。本模組僅依歷史出貨量估算，未納入促銷、季節、缺貨替代等外部因素。</p>
+        <p>依清洗後歷史出貨資料，以月為單位彙總各商品類別／商品的出貨量，採<b>多步驗證</b>：固定一個「基準期」，站在該期一次往後推 1～3 期，過程中<b>完全不看測試期的實際值</b>，再與實際值比對，並由系統自動為每個序列選出誤差最低的模型。驗證後的需求可作為 ABC 分級、儲位配置與採購備貨的依據。本模組僅依歷史出貨量估算，未納入促銷、季節、缺貨替代等外部因素。</p>
       </div>
       <div id="sampleWarnForecast"></div>
 
@@ -984,7 +1039,7 @@
           <div class="kv"><span class="k">歷史資料可用期數</span><span class="v" id="forecastPeriodCount">—</span></div>
           <div class="kv"><span class="k">新品判定</span><span class="v" id="forecastNewRule">站在預測基準點前 3 個月內首次出貨＝新品（改用冷啟動類比、不評分）</span></div>
         </div>
-        <p class="section-note"><b>多步驗證</b>：站在基準期一次往後推 H 期（H＝上方選的預測區間），過程中看不到測試期任何實際值——不同於「滾動一步」每走一步就被餵一次答案、會把準確度估得偏樂觀。三種預測區間<b>共用同一個基準期</b>，只是往後推得遠近不同，因此可直接互相比較（推得越遠誤差通常越大）。每個序列由系統自動選出誤差最低的模型，準確度以 MASE（&lt;1 表示優於 Naive 基準）與誤差%（WAPE）呈現。<b>新品例外</b>：首次出貨落在基準期前最近 N 個月內的 SKU，歷史太短、時序選模無統計意義，改用「冷啟動（類比）」估計——優先取自身近期實際值，完全無自身紀錄才退回同類別＋同儲位區成熟品的中位數水準，且<b>不計 MASE／WAPE</b>（避免用不可靠的數字誤導）。N 由下方「商品生命週期分類」的判斷視窗控制。</p>
+        <p class="section-note"><b>多步驗證</b>：站在基準期一次往後推 H 期（H＝上方選的預測區間），過程中看不到測試期任何實際值——不同於「滾動一步」每走一步就被餵一次答案、會把準確度估得偏樂觀。三種預測區間<b>共用同一個基準期</b>，只是往後推得遠近不同，因此可直接互相比較（推得越遠誤差通常越大）。每個序列由系統自動選出誤差最低的模型，準確度以 MASE（&lt;1 表示優於 Naive 基準）與誤差%（WAPE）呈現。<b>新品例外</b>：首次出貨落在基準期前最近 N 個月內的商品，歷史太短、時序選模無統計意義，改用「冷啟動（類比）」估計——優先取自身近期實際值，完全無自身紀錄才退回同類別＋同儲位區成熟品的中位數水準，且<b>不計 MASE／WAPE</b>（避免用不可靠的數字誤導）。N 由下方「商品生命週期分類」的判斷視窗控制。</p>
       </div>
 
       <div class="grid grid-4" style="margin-bottom:14px;" id="forecastStatTiles"></div>
@@ -1025,13 +1080,13 @@
       </details>
 
       <details class="card audit-block" style="margin-top:14px;">
-        <summary><span class="audit-title">SKU 測試期預測 vs 實際 Top 20</span><span class="card-sub" id="forecastSkuSub">取歷史出貨量前 200 名 SKU 為候選池，顯示測試期預測 vs 實際</span></summary>
+        <summary><span class="audit-title">商品測試期預測 vs 實際 Top 20</span><span class="card-sub" id="forecastSkuSub">取歷史出貨量前 200 名商品為候選池，顯示測試期預測 vs 實際</span></summary>
         <div class="table-scroll" style="max-height:400px; margin-top:10px;"><table class="data-table" id="forecastSkuTable"></table></div>
       </details>
 
       <details class="card audit-block" style="margin-top:14px;">
         <summary><span class="audit-title">商品生命週期分類（新品／滯銷／正常）</span><span class="card-sub">依出貨日期判斷新品／滯銷／正常</span></summary>
-        <p class="card-sub" style="margin-top:10px;">依「出貨日期」判斷每個 SKU 的首末出貨月：<b>首次出貨落在「預測基準點」前 N 個月內＝新品</b>（與需求預測的冷啟動採同一判準，站在做預測的時間點決定，三處結果一致）；最近 N 個月無出貨（以前曾有）＝滯銷；其餘＝正常。純依銷售訊號推論，無商品狀態主檔覆核。</p>
+        <p class="card-sub" style="margin-top:10px;">依「出貨日期」判斷每個商品的首末出貨月：<b>首次出貨落在「預測基準點」前 N 個月內＝新品</b>（與需求預測的冷啟動採同一判準，站在做預測的時間點決定，三處結果一致）；最近 N 個月無出貨（以前曾有）＝滯銷；其餘＝正常。純依銷售訊號推論，無商品狀態主檔覆核。</p>
         <div style="display:flex; align-items:center; gap:12px; margin:10px 0; flex-wrap:wrap;">
           <label style="font-size:15px;">判斷視窗（最近 N 個月）</label>
           <select id="lifecycleWindow" onchange="onLifecycleWindowChangeAll()" style="padding:4px 8px; border-radius:6px;">
@@ -1060,6 +1115,7 @@
     <!-- ================= 4. ABC / CO-PICK ================= -->
     <section class="screen" id="screen-abc-grade" data-title="ABC 熱度分級" data-desc="商品熱度分級（貨架／棧板）">
       <div class="page-head">
+        <div class="ph-emblem" style="--ph-tone:var(--series-1);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="17" height="16" rx="2"/><path d="M3.5 10.5h17"/><path d="M9.2 4v16"/><path d="M14.8 4v16"/></svg></div>
         <h1>4｜儲位配置 － ABC 熱度分級</h1>
         <p>依清洗後資料計算各商品類別的出貨熱度分級，作為儲位分區與批次揀貨規則的依據。門檻可調整，變更後「共同揀取關係」與「儲位配置與商品查詢」兩頁會在下次開啟時自動套用新門檻重算。</p>
       </div>
@@ -1079,23 +1135,23 @@
       <div class="grid grid-2" style="align-items:start;">
         <div class="card">
           <h3>Pareto（貨架區·依預測揀貨次數）</h3>
-          <p class="card-sub">X＝SKU 依預測揀貨次數排名百分位；Y＝累計佔比</p>
+          <p class="card-sub">X＝商品依預測揀貨次數排名百分位；Y＝累計佔比</p>
           <div id="skuParetoShelf"></div>
         </div>
         <div class="card">
           <h3>Pareto（棧板區·依預測出貨量）</h3>
-          <p class="card-sub">X＝SKU 依預測出貨量排名百分位；Y＝累計佔比</p>
+          <p class="card-sub">X＝商品依預測出貨量排名百分位；Y＝累計佔比</p>
           <div id="skuParetoPallet"></div>
         </div>
       </div>
       <div class="grid grid-2" style="align-items:start; margin-top:14px;">
         <div class="card">
-          <h3>SKU ABC 分級 Top 15（貨架區·依預測揀貨次數）</h3>
+          <h3>商品 ABC 分級 Top 15（貨架區·依預測揀貨次數）</h3>
           <p class="card-sub" id="abcShelfSub">—</p>
           <div id="abcShelfTable" class="sku-rank-list" style="max-height:400px; overflow-y:auto; margin-top:12px;"></div>
         </div>
         <div class="card">
-          <h3>SKU ABC 分級 Top 15（棧板區·依預測出貨量）</h3>
+          <h3>商品 ABC 分級 Top 15（棧板區·依預測出貨量）</h3>
           <p class="card-sub" id="abcPalletSub">—</p>
           <div id="abcPalletTable" class="sku-rank-list" style="max-height:400px; overflow-y:auto; margin-top:12px;"></div>
         </div>
@@ -1112,21 +1168,27 @@
         <summary><span class="audit-title">棧板區（依預測出貨量）</span><span class="card-sub" id="predAbcPalletSub">—</span></summary>
         <div id="predAbcPalletChart" style="margin-top:12px;"></div>
       </details>
+
+      <div class="btn-row">
+        <button class="btn" onclick="goScreen('forecast')">← 上一步</button>
+        <button class="btn btn-primary" onclick="goScreen('abc-copick')">下一步：共同揀取關係 →</button>
+      </div>
     </section>
 
     <section class="screen" id="screen-abc-copick" data-title="共同揀取關係" data-desc="同單商品共同出現分析">
       <div class="page-head">
+        <div class="ph-emblem" style="--ph-tone:var(--series-1);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="17" height="16" rx="2"/><path d="M3.5 10.5h17"/><path d="M9.2 4v16"/><path d="M14.8 4v16"/></svg></div>
         <h1>4｜儲位配置 － 共同揀取關係</h1>
         <p>分析同一張訂單中商品／類別的共同出現關係，供高頻商品相鄰儲位、C 級類別群組相鄰擺放之參考。</p>
       </div>
       <div class="card" style="margin-bottom:14px;">
         <h3>商品共同揀取 Top 組合（供 A、B 級商品相鄰參考）</h3>
-        <p class="card-sub" id="adjSub">篩選同區域（同為貨架或同為棧板）、Lift 高且兩商品皆屬高頻的 SKU 組合，建議儲位相鄰以縮短同趟揀取往返</p>
+        <p class="card-sub" id="adjSub">篩選同區域（同為貨架或同為棧板）、Lift 高且兩商品皆屬高頻的商品組合，建議儲位相鄰以縮短同趟揀取往返</p>
         <div class="table-scroll" style="max-height:340px;"><table class="data-table" id="adjTable"></table></div>
       </div>
       <div class="card" style="margin-bottom:14px;">
         <h3>類別共同揀取 Top 組合（供 C 級類別群組相鄰參考）</h3>
-        <p class="card-sub" id="catPairSub">A／B 級為個別 SKU 排位、用不到本表；此表供 C 級（依類別群聚擺放）安排常一起被揀的類別群組相鄰之參考</p>
+        <p class="card-sub" id="catPairSub">A／B 級為個別商品排位、用不到本表；此表供 C 級（依類別群聚擺放）安排常一起被揀的類別群組相鄰之參考</p>
         <div class="table-scroll" style="max-height:360px;"><table class="data-table" id="catPairTable"></table></div>
       </div>
       <div class="card">
@@ -1134,10 +1196,16 @@
           <b>計算方式：</b>以「系統出貨單號」為訂單鍵值，support = 同時出現次數 ÷ 總出貨單數；lift = 同時出現機率 ÷（各自獨立出現機率之積），lift ＞1 代表正相關，數值越大關聯性越強。為避免小樣本雜訊，僅列出共同出貨次數達門檻以上的組合（門檻依資料量自動調整）。
         </div>
       </div>
+
+      <div class="btn-row">
+        <button class="btn" onclick="goScreen('abc-grade')">← 上一步</button>
+        <button class="btn btn-primary" onclick="goScreen('abc-storage')">下一步：儲位配置與商品查詢 →</button>
+      </div>
     </section>
 
     <section class="screen" id="screen-abc-storage" data-title="儲位配置與商品查詢" data-desc="改善前後倉儲雙圖與商品查詢">
       <div class="page-head">
+        <div class="ph-emblem" style="--ph-tone:var(--series-1);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="17" height="16" rx="2"/><path d="M3.5 10.5h17"/><path d="M9.2 4v16"/><path d="M14.8 4v16"/></svg></div>
         <h1>4｜儲位配置 － 儲位配置與商品查詢</h1>
         <p>提供改善前後倉儲雙圖，並可輸入商品ID 查詢其改善前後所屬區塊（幾何比照倉儲_區塊內ABC分群圖）。</p>
       </div>
@@ -1169,13 +1237,19 @@
         <div class="card"><h3>改善前配置（現行類別配置）</h3><p class="card-sub">滑過區塊顯示所屬類別；閃爍藍框＝查詢商品所在區塊；格內顏色＝個別商品的預測熱度分級（示意用，刻意隨機打散，非依熱度集中排列——僅按類別集中在同一貨架／棧板）</p><div class="wh-map" id="whBeforeMap"></div><div class="legend-row"><div class="legend-item"><span class="legend-swatch" style="background:#e8564a;"></span>A（近，散落）</div><div class="legend-item"><span class="legend-swatch" style="background:#f0b13c;"></span>B（中，散落）</div><div class="legend-item"><span class="legend-swatch" style="background:#7cc47c;"></span>C（遠，散落）</div><div class="legend-item"><span style="color:var(--critical);font-size:17px;margin-right:4px;vertical-align:middle;">★</span>出貨點</div><div class="legend-item"><span style="display:inline-block;width:16px;height:3px;background:var(--critical);vertical-align:middle;margin-right:5px;"></span>紅橫線＝倉庫出入口</div><div class="legend-item"><span style="display:inline-block;width:3px;height:14px;background:var(--critical);vertical-align:middle;margin-right:6px;"></span>紅直線＝貨車出入口</div></div></div>
         <div class="card"><h3>改善後配置（ABC 熱度配置＋共同揀取）</h3><p class="card-sub"><span style="color:#e8564a;font-weight:600;">紅＝A 近</span>／<span style="color:#f0b13c;font-weight:600;">橙＝B 中</span>／<span style="color:#7cc47c;font-weight:600;">綠＝C 遠</span>；每一格為一個商品儲位，依沿走道的實際繞行距離配置，色帶自出貨點（★）由紅→橙→綠向外擴散，跨分區連續。閃爍＝查詢商品所屬分區</p><div class="wh-map" id="whAfterMap"></div><div class="legend-row"><div class="legend-item"><span class="legend-swatch" style="background:#e8564a;"></span>A（近）</div><div class="legend-item"><span class="legend-swatch" style="background:#f0b13c;"></span>B（中）</div><div class="legend-item"><span class="legend-swatch" style="background:#7cc47c;"></span>C（遠）</div><div class="legend-item"><span style="color:var(--critical);font-size:17px;margin-right:4px;vertical-align:middle;">★</span>出貨點</div><div class="legend-item"><span style="display:inline-block;width:16px;height:3px;background:var(--critical);vertical-align:middle;margin-right:5px;"></span>紅橫線＝倉庫出入口</div><div class="legend-item"><span style="display:inline-block;width:3px;height:14px;background:var(--critical);vertical-align:middle;margin-right:6px;"></span>紅直線＝貨車出入口</div></div></div>
       </div>
+
+      <div class="btn-row">
+        <button class="btn" onclick="goScreen('abc-copick')">← 上一步</button>
+        <button class="btn btn-primary" onclick="goScreen('batch')">下一步：揀貨策略 →</button>
+      </div>
     </section>
 
     <!-- ================= 5. BATCH ================= -->
     <section class="screen" id="screen-batch" data-title="揀貨策略" data-desc="逐單揀貨 vs 批次併單模擬">
       <div class="page-head">
+        <div class="ph-emblem" style="--ph-tone:var(--series-2);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.4"/><circle cx="17" cy="20" r="1.4"/><path d="M2.5 3h2l2.2 12a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L20 7.5H6"/></svg></div>
         <h1>5｜揀貨策略</h1>
-        <p>批次以「當日＋縣市＋行政區」為分群硬限制（每批＝一條配送路線，批次不跨區），比較逐單揀貨與播種式批次（群內同 SKU 聚合、一次揀完再分貨）的揀貨回合數與倉內移動距離。播種式批次的容量＝每趟最多揀取的不同 SKU 數。行政區訂單數 ≥N 才就地相似度併單，未達門檻的稀疏行政區併入同日同縣市。</p>
+        <p>批次以「當日＋縣市＋行政區」為分群硬限制（每批＝一條配送路線，批次不跨區），比較逐單揀貨與播種式批次（群內同商品聚合、一次揀完再分貨）的揀貨回合數與倉內移動距離。播種式批次的容量＝每趟最多揀取的不同商品數。行政區訂單數 ≥N 才就地相似度併單，未達門檻的稀疏行政區併入同日同縣市。</p>
       </div>
       <div id="sampleWarnBatch"></div>
 
@@ -1183,20 +1257,20 @@
         <div class="card">
           <h3>情境參數</h3>
           <div class="slider-row">
-            <div class="slider-label"><span>播種批次容量（每趟最多揀取 SKU 數）</span><span class="val" id="batchCapVal">20 SKU</span></div>
+            <div class="slider-label"><span>播種批次容量（每趟最多揀取商品數）</span><span class="val" id="batchCapVal">20 個商品</span></div>
             <input type="range" id="batchCapSlider" min="5" max="40" value="20" step="1" oninput="onBatchSliderChange()">
           </div>
           <div class="slider-row">
             <div class="slider-label"><span>稀疏門檻 N（行政區訂單 ≥N 就地併單，否則併入同縣市）</span><span class="val" id="batchNVal">5</span></div>
             <input type="range" id="batchNSlider" min="1" max="20" value="5" step="1" oninput="onBatchNChange()">
           </div>
-          <p class="footnote">容量以 10／20／30 SKU 比較，20 為基準。若每群不重複 SKU 數中位數 ≤ 容量，代表整群多能一趟揀完、容量影響有限。</p>
+          <p class="footnote">容量以 10／20／30 個商品比較，20 為基準。若每群不重複商品數中位數 ≤ 容量，代表整群多能一趟揀完、容量影響有限。</p>
           <div class="kv-grid">
             <div class="kv"><span class="k">訂單總數</span><span class="v" id="batchOrderCount">—</span></div>
             <div class="kv"><span class="k">訂單明細總行數</span><span class="v" id="batchLineCount">—</span></div>
             <div class="kv"><span class="k">平均每張訂單行數</span><span class="v" id="batchAvgLines">—</span></div>
             <div class="kv"><span class="k">地理分群數（日×縣市×行政區）</span><span class="v" id="batchGroupCount">—</span></div>
-            <div class="kv"><span class="k">每群不重複 SKU 數中位數</span><span class="v" id="batchSkuMedian">—</span></div>
+            <div class="kv"><span class="k">每群不重複商品數中位數</span><span class="v" id="batchSkuMedian">—</span></div>
             <div class="kv"><span class="k">容量卡到的群比例</span><span class="v" id="batchBind">—</span></div>
             <div class="kv"><span class="k">評估期間（最近一季）</span><span class="v" id="batchWindow">—</span></div>
           </div>
@@ -1226,7 +1300,7 @@
           <h3 style="margin:0;">指定出貨日期查看併單結果</h3>
           <button class="btn btn-primary" onclick="downloadBatchDayCSV()" style="margin-left:auto; font-weight:600;">⬇ 下載當日併單結果（CSV）</button>
         </div>
-        <p class="card-sub">選擇或輸入某一出貨日期，先看當日整體彙總，再從下拉選單挑一個波（就地併單／稀疏併縣市）查看該波的併單結果與 SKU 揀取順序。</p>
+        <p class="card-sub">選擇或輸入某一出貨日期，先看當日整體彙總，再從下拉選單挑一個波（就地併單／稀疏併縣市）查看該波的併單結果與商品揀取順序。</p>
         <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:6px 0 12px;">
           <label style="font-size:15px; font-weight:600;">出貨日期</label>
           <div class="combo-wrap">
@@ -1246,7 +1320,7 @@
           <label style="font-size:15px; font-weight:600;">選擇波次／地區</label>
           <select id="batchWaveSelect" style="padding:7px 12px; border:1px solid var(--border); border-radius:8px; min-width:280px; font-size:15px;" onchange="renderSelectedWave()"></select>
         </div>
-        <div id="batchDayResult"><div class="empty">📅 請輸入或選擇上方的出貨日期，即可查看當日各波次（就地併單／稀疏併縣市）的併單結果與 SKU 揀取順序。</div></div>
+        <div id="batchDayResult"><div class="empty">📅 請輸入或選擇上方的出貨日期，即可查看當日各波次（就地併單／稀疏併縣市）的併單結果與商品揀取順序。</div></div>
       </div>
 
       <div class="btn-row">
@@ -1259,6 +1333,7 @@
     <!-- ================= 7. KPI ================= -->
     <section class="screen" id="screen-kpi" data-title="KPI 儀表板" data-desc="改善前後成果總覽">
       <div class="page-head">
+        <div class="ph-emblem" style="--ph-tone:var(--accent-teal);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg></div>
         <h1>6｜KPI 儀表板</h1>
         <p>彙整改善前後配置與批次併單結果，對照專案核准之三項關鍵績效指標，並提供保守／基準／樂觀敏感度分析。</p>
       </div>
@@ -1305,7 +1380,7 @@
         <div class="card">
           <h3>情境敏感度分析</h3>
           <p class="card-sub">依步行速度、取放時間等假設之不確定性，估算保守至樂觀範圍</p>
-          <div class="table-scroll"><table class="data-table scenario-table" id="scenarioTable"></table></div>
+          <div class="table-scroll"><div class="scenario-grid" id="scenarioTable"></div></div>
         </div>
       </div>
 
@@ -1315,8 +1390,8 @@
           <div class="assumption-panel" id="assumptionFinal" style="margin-top:10px;">
             <b>資料來源：</b>門市出貨訂單明細檔、商品類別對應表、倉儲幾何（倉儲_資料.json，比照倉儲_區塊內ABC分群圖）。<br>
             <b>模型假設：</b>僅分析人工揀貨。改善前＝類別配置＋逐單揀貨；改善後＝ABC 熱度配置＋共同揀取＋批次併單（播種）；步行速度、取放時間為可調假設值。<br>
-            <b>計算方式：</b>以實際訂單計算——每張訂單造訪到的各區塊，用其 distance_m（沿走道曼哈頓到出貨原點）來回加總為移動距離；移動距離：改善前＝改善前儲位下「逐單」每張訂單造訪區塊來回加總；改善後＝改善後儲位下「播種批次」每波各回合造訪區塊來回加總。改善率＝（改善前－改善後）／改善前；總揀貨工時＝移動距離／步行速度＋揀取次數×取放時間（逐單取放次數＝總明細行數，播種＝各波不重複 SKU 合計；播種另有分貨工時未計入）。<br>
-            <b>限制：</b>座標為示意重繪、無真實 SKU儲位主檔；抽樣訂單估算，僅供方案比較與現場驗證參考，不代表實際營運績效。
+            <b>計算方式：</b>以實際訂單計算——每張訂單造訪到的各區塊，用其 distance_m（沿走道曼哈頓到出貨原點）來回加總為移動距離；移動距離：改善前＝改善前儲位下「逐單」每張訂單造訪區塊來回加總；改善後＝改善後儲位下「播種批次」每波各回合造訪區塊來回加總。改善率＝（改善前－改善後）／改善前；總揀貨工時＝移動距離／步行速度＋揀取次數×取放時間（逐單取放次數＝總明細行數，播種＝各波不重複商品合計；播種另有分貨工時未計入）。<br>
+            <b>限制：</b>座標為示意重繪、無真實商品儲位主檔；抽樣訂單估算，僅供方案比較與現場驗證參考，不代表實際營運績效。
           </div>
         </details>
       </div>
@@ -1364,7 +1439,7 @@ function truncate(s, n){ s=String(s??''); return s.length>n ? s.slice(0,n-1)+'�
 /* 把座標軸上限進位成 1/2/5×10ⁿ 的「好看刻度」，讓 Y 軸標籤是整數而非 13.7 這種數字。
    原本只是 columnChart() 內的區域變數，lineChart() 也要用，故提升為共用函式。 */
 function niceMax(v){ if(v<=0) return 10; const mag=Math.pow(10,Math.floor(Math.log10(v))); const nrm=v/mag; const n2=nrm<=1?1:nrm<=2?2:nrm<=5?5:10; return n2*mag; }
-function emptyState(msg){ return `<div class="empty">${escHtml(msg)}</div>`; }
+function emptyState(msg){ return `<div class="empty"><div class="empty-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12v5"/></svg></div>${escHtml(msg)}</div>`; }
 function sampleBanner(){
   if(!usingSample) return '';
   return `<div class="card" style="margin-bottom:14px; border-color:var(--warning); background:color-mix(in srgb, var(--warning) 12%, var(--surface-1));">
@@ -1694,8 +1769,13 @@ const ABC_COLOR = {A:'#e8564a', B:'#f0b13c', C:'#7cc47c'};
 function heatColor(t){ const a = 0.10 + 0.85*Math.max(0,Math.min(1,t)); return `rgba(42,120,214,${a.toFixed(3)})`; }
 
 function paretoCurve(pareto, aThresh, bThresh){
-  const pts = pareto && pareto.points || [];
-  if(!pts.length) return emptyState('尚無可計算之 SKU 資料');
+  const rawPts = pareto && pareto.points || [];
+  if(!rawPts.length) return emptyState('尚無可計算之商品資料');
+  // 累計佔比曲線在數學上一定是從「0% 商品→0% 累積佔比」這個原點開始，但後端回傳的
+  // points 是「每個商品排名對應的累積百分位」，第一筆本來就是第 1 名商品自己的佔比
+  // （不是 0），所以曲線視覺上會像是憑空從半空中冒出來、跟下面色塊的左下角對不齊。
+  // 這裡在畫圖前手動補一個 (0,0) 起點，純粹是把曲線起點畫完整，不影響任何實際計算數值。
+  const pts = (rawPts[0] && (rawPts[0].x>0 || rawPts[0].y>0)) ? [{x:0,y:0}, ...rawPts] : rawPts;
   const W=620,H=320,M={top:14,right:16,bottom:54,left:42};
   const iw=W-M.left-M.right, ih=H-M.top-M.bottom;
   const x=v=>M.left+(v/100)*iw, y=v=>M.top+ih-(v/100)*ih;
@@ -1708,7 +1788,7 @@ function paretoCurve(pareto, aThresh, bThresh){
   svg+=`<rect x="${x(bPct)}" y="${M.top}" width="${Math.max(0,x(100)-x(bPct)).toFixed(1)}" height="${ih}" fill="${ABC_COLOR.C}" opacity="0.22"/>`;
   [0,25,50,75,100].forEach(v=>{ svg+=`<line x1="${M.left}" x2="${W-M.right}" y1="${y(v)}" y2="${y(v)}" stroke="var(--gridline)"/><text x="${M.left-6}" y="${y(v)+3}" text-anchor="end" class="zone-label">${v}%</text>`; });
   [0,25,50,75,100].forEach(v=>{ svg+=`<text x="${x(v)}" y="${H-M.bottom+16}" text-anchor="middle" class="zone-label">${v}%</text>`; });
-  svg+=`<text x="${W/2}" y="${H-6}" text-anchor="middle" class="zone-label" style="font-weight:600;">SKU 排名百分位</text>`;
+  svg+=`<text x="${W/2}" y="${H-6}" text-anchor="middle" class="zone-label" style="font-weight:600;">商品排名百分位</text>`;
   svg+=`<path d="${area}" fill="var(--brand)" opacity="0.08"/>`;
   svg+=`<path d="${path}" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
   svg+=`<line x1="${x(aPct)}" x2="${x(aPct)}" y1="${M.top}" y2="${M.top+ih}" stroke="${ABC_COLOR.A}" stroke-width="1.6" stroke-dasharray="5,4"/>`;
@@ -2529,9 +2609,9 @@ async function loadCleanPreviewDataset(dataset, tableId, subId, limit){
 async function loadCategoryTable(){
   const box = document.getElementById('categoryTableView'); if(!box) return;
   try{
-    const r = await apiGet('/api/abc/category', {a_thresh:70, b_thresh:90});
+    const r = await apiGet('/api/abc/category', {a_thresh:abcParams.a, b_thresh:abcParams.b});
     if(!r.categories.length){ box.innerHTML = `<tbody><tr><td>${emptyState('（清洗後無出貨資料）')}</td></tr></tbody>`; return; }
-    box.innerHTML = `<thead><tr><th>商品類別</th><th style="text-align:right;">SKU數</th></tr></thead>
+    box.innerHTML = `<thead><tr><th>商品類別</th><th style="text-align:right;">商品數</th></tr></thead>
       <tbody>${r.categories.map(c=>`<tr><td>${escHtml(c.name)}</td><td style="text-align:right;">${c.sku_count}</td></tr>`).join('')}</tbody>`;
   }catch(e){ box.innerHTML = `<tbody><tr><td>${emptyState(e.message)}</td></tr></tbody>`; }
 }
@@ -2639,8 +2719,8 @@ async function loadForecastTrend(){
     if(newRule) newRule.textContent = `基準 ${basePeriod} 起回推 ${lifecycleN()} 個月內首次出貨＝新品（改用冷啟動類比、不評分）`;
     document.getElementById('forecastStatTiles').innerHTML = `
       <div class="card stat-tile"><div class="label">測試期間</div><div class="value" style="font-size:23px;">${escHtml(tp[0]||'—')}${tp.length>1?' ～ '+escHtml(tp[tp.length-1]):''}</div><div class="card-sub" style="margin-top:6px;">基準 ${escHtml(basePeriod)}，測試自 ${escHtml(tp[0]||'—')} 起 ${s.horizon} 月</div></div>
-      <div class="card stat-tile"><div class="label">MASE</div><div class="value">${cs?'—':(s.mase!=null?s.mase.toFixed(2):'—')}</div><div class="delta">${cs?'新品·冷啟動不評分':'&lt;1 優於 Naive 基準'}</div></div>
-      <div class="card stat-tile"><div class="label">誤差%（WAPE）</div><div class="value">${cs?'—':pct(s.wape)}</div><div class="delta">${cs?'新品·冷啟動不評分':''}</div></div>
+      <div class="card stat-tile"><div class="label">MASE</div><div class="value">${cs?'—':(s.mase!=null?s.mase.toFixed(2):'—')}</div><div class="card-sub" style="margin-top:6px; white-space:nowrap;">${cs?'新品·冷啟動不評分':'誤差平均 ÷ Naive 誤差平均'}</div></div>
+      <div class="card stat-tile"><div class="label">誤差%（WAPE）</div><div class="value">${cs?'—':pct(s.wape)}</div><div class="card-sub" style="margin-top:6px; white-space:nowrap;">${cs?'新品·冷啟動不評分':'Σ|實際－預測| ÷ Σ實際'}</div></div>
       <div class="card stat-tile"><div class="label">選用模型</div><div class="value" style="font-size:23px;">${escHtml(s.model)}</div><div class="card-sub" style="margin-top:6px;">${cs?'新品·冷啟動（類比）':'系統自動選模（walk-forward，依 MASE）'}</div></div>`;
     const tLabel = fcTarget==='cnt' ? '揀貨次數' : '出貨量';
     sub.textContent = (fcSkuFilter ? `商品ID ${fcSkuFilter} 之月${tLabel}` : `全資料集加總之月${tLabel}`)
@@ -2666,7 +2746,7 @@ function lifecycleN(){ return Number((document.getElementById('lifecycleWindow')
 async function loadForecastBreakdown(){
   const box = document.getElementById('forecastCatTable');
   try{
-    if(!Object.keys(CAT_NAME_CACHE).length){ try{ const c = await apiGet('/api/abc/category',{a_thresh:70,b_thresh:90}); c.categories.forEach(x=>CAT_NAME_CACHE[x.cat]=x.name); }catch(e){} }
+    if(!Object.keys(CAT_NAME_CACHE).length){ try{ const c = await apiGet('/api/abc/category',{a_thresh:abcParams.a,b_thresh:abcParams.b}); c.categories.forEach(x=>CAT_NAME_CACHE[x.cat]=x.name); }catch(e){} }
     const b = await apiGet('/api/forecast/breakdown', {granularity:'month', target:fcTarget, horizon:fcHorizon});
     box.innerHTML = `<thead><tr><th>商品類別</th><th style="text-align:right;">測試期實際</th><th style="text-align:right;">測試期預測</th>
       <th style="text-align:right;">誤差%</th><th style="text-align:right;">MASE</th><th>選用模型</th></tr></thead><tbody>
@@ -2713,10 +2793,10 @@ async function loadLifecycle(recentN){
     LIFECYCLE_CACHE = {recentN, rows: lc.rows};
     tiles.innerHTML = `
       <div class="card stat-tile"><div class="label">新品</div><div class="value" style="color:var(--success-text);">${lc.counts['新品']}</div><div class="delta">首次出貨在最近 ${recentN} 期</div></div>
-      <div class="card stat-tile"><div class="label">正常／持續</div><div class="value">${lc.counts['正常']}</div><div class="delta">共 ${num(lc.rows.length)} 個有效 SKU</div></div>
+      <div class="card stat-tile"><div class="label">正常／持續</div><div class="value">${lc.counts['正常']}</div><div class="delta">共 ${num(lc.rows.length)} 個有效商品</div></div>
       <div class="card stat-tile"><div class="label">滯銷／沉睡</div><div class="value" style="color:var(--critical);">${lc.counts['滯銷']}</div><div class="delta">最近 ${recentN} 期無出貨</div></div>`;
     const preview = lc.rows.filter(r=>r.cls!=='正常').sort((a,b)=> a.cls===b.cls?0:(a.cls==='新品'?-1:1)).slice(0,50);
-    box.innerHTML = !preview.length ? `<tbody><tr><td>${emptyState('目前視窗下沒有新品或滯銷 SKU')}</td></tr></tbody>` :
+    box.innerHTML = !preview.length ? `<tbody><tr><td>${emptyState('目前視窗下沒有新品或滯銷商品')}</td></tr></tbody>` :
       `<thead><tr><th>分類</th><th>商品ID</th><th>商品名稱</th><th>類別</th>
         <th>首次出貨</th><th>最近出貨</th><th style="text-align:right;">有量期數</th><th style="text-align:right;">沉睡期數</th></tr></thead><tbody>
       ${preview.map(r=>`<tr><td>${r.cls==='新品'?'<span class="chip ok">新品</span>':'<span class="chip bad">滯銷</span>'}</td><td>${r.sku}</td><td>${escHtml(r.name)}</td><td>${escHtml(catName(r.cat))}</td>
@@ -2839,8 +2919,8 @@ async function loadAbcTab(){
     // 的 _pareto() 說明），不再用 top_n=200 截斷後的清單自己湊點，曲線才會畫到 100%。
     document.getElementById('skuParetoShelf').innerHTML = paretoCurve(r.pareto_shelf, abcParams.a, abcParams.b);
     document.getElementById('skuParetoPallet').innerHTML = paretoCurve(r.pareto_pallet, abcParams.a, abcParams.b);
-    document.getElementById('abcShelfSub').textContent = `共 ${num(r.shelf_total)} 個貨架區 SKU，依預測揀貨次數排序，顯示前 15`;
-    document.getElementById('abcPalletSub').textContent = `共 ${num(r.pallet_total)} 個棧板區 SKU，依預測出貨量排序，顯示前 15`;
+    document.getElementById('abcShelfSub').textContent = `共 ${num(r.shelf_total)} 個貨架區商品，依預測揀貨次數排序，顯示前 15`;
+    document.getElementById('abcPalletSub').textContent = `共 ${num(r.pallet_total)} 個棧板區商品，依預測出貨量排序，顯示前 15`;
     document.getElementById('abcShelfTable').innerHTML = skuRankList(r.shelf.slice(0,15), '預測揀貨次數');
     document.getElementById('abcPalletTable').innerHTML = skuRankList(r.pallet.slice(0,15), '預測出貨量');
   }catch(e){
@@ -3150,7 +3230,7 @@ async function doProductQuery(){
 /* ---------------- 5. 揀貨策略（地理分群＋播種式批次，自原型 renderBatchScreen 移植；
    分波、回合切分、移動距離全部由後端 /api/batch/* 算好，前端只負責畫表／畫圖） ---------------- */
 function onBatchSliderChange(){
-  document.getElementById('batchCapVal').textContent = document.getElementById('batchCapSlider').value + ' SKU';
+  document.getElementById('batchCapVal').textContent = document.getElementById('batchCapSlider').value + ' 個商品';
   loadBatchStrategies();
 }
 function onBatchNChange(){
@@ -3250,7 +3330,7 @@ async function loadBatchDates(){
 function clearBatchDay(){
   document.getElementById('batchDayInput').value = '';
   document.getElementById('batchDaySummary').innerHTML = '';
-  document.getElementById('batchDayResult').innerHTML = '<div class="empty">📅 請輸入或選擇上方的出貨日期，即可查看當日各波次（就地併單／稀疏併縣市）的併單結果與 SKU 揀取順序。</div>';
+  document.getElementById('batchDayResult').innerHTML = '<div class="empty">📅 請輸入或選擇上方的出貨日期，即可查看當日各波次（就地併單／稀疏併縣市）的併單結果與商品揀取順序。</div>';
   document.getElementById('batchWaveSelectRow').style.display = 'none';
   document.getElementById('batchWaveSelect').innerHTML = '';
   document.getElementById('batchGeoWaveBox').style.display = 'none';
@@ -3260,7 +3340,7 @@ function clearBatchDay(){
 }
 function batchGeoWaveRows(waves){
   const sorted = [...waves].sort((a,b)=>b.orders-a.orders);
-  const head = `<thead><tr><th>縣市</th><th>行政區／波</th><th>類型</th><th>訂單數</th><th>明細行數</th><th>不重複SKU數</th><th>批次回合</th></tr></thead>`;
+  const head = `<thead><tr><th>縣市</th><th>行政區／波</th><th>類型</th><th>訂單數</th><th>明細行數</th><th>不重複商品數</th><th>批次回合</th></tr></thead>`;
   const body = sorted.map(w=>`<tr>
     <td>${escHtml(w.city)}</td>
     <td>${w.dist?escHtml(w.dist):'—'}</td>
@@ -3316,12 +3396,12 @@ function renderSelectedWave(){
   resBox.innerHTML = `
       <div class="card">
         <h3>${escHtml(w.city)}${w.dist?'・'+escHtml(w.dist):''} ${w.type==='dense'?'<span class="chip ok">就地併單</span>':'<span class="chip warn">稀疏併縣市</span>'}</h3>
-        <p class="card-sub">訂單 ${num(w.orders)}　｜　明細 ${num(w.lines)} 行　｜　SKU ${num(w.sku_count)}　｜　回合 ${num(w.rounds)}　｜　移動距離 ${num(w.move_dist)} m</p>
+        <p class="card-sub">訂單 ${num(w.orders)}　｜　明細 ${num(w.lines)} 行　｜　商品 ${num(w.sku_count)}　｜　回合 ${num(w.rounds)}　｜　移動距離 ${num(w.move_dist)} m</p>
         <div class="table-scroll" style="max-height:200px; margin-bottom:8px;"><table class="data-table"><thead><tr>
-          <th>回合</th><th style="text-align:right;">SKU數</th><th style="text-align:right;">涉及分區</th><th style="text-align:right;">移動距離</th><th style="text-align:right;">累計完成訂單</th></tr></thead><tbody>
+          <th>回合</th><th style="text-align:right;">商品數</th><th style="text-align:right;">涉及分區</th><th style="text-align:right;">移動距離</th><th style="text-align:right;">累計完成訂單</th></tr></thead><tbody>
           ${w.round_summary.map(rs=>`<tr><td>第${rs.round}回合</td><td style="text-align:right;">${rs.sku_count}</td><td style="text-align:right;">${rs.zones}</td>
             <td style="text-align:right;">${num(rs.dist)}</td><td style="text-align:right;">${rs.cum_done}（${pct(rs.cum_pct)}）</td></tr>`).join('')}</tbody></table></div>
-        <details open><summary>展開 SKU 揀取順序（依回合）</summary>
+        <details open><summary>展開商品揀取順序（依回合）</summary>
           <div class="table-scroll" style="max-height:280px; margin-top:8px;"><table class="data-table"><thead><tr>
             <th>回合</th><th>商品ID</th><th>商品名稱</th><th>分區</th><th style="text-align:right;">服務訂單數</th><th style="text-align:right;">數量</th></tr></thead><tbody>
             ${w.seq.map(s=>`<tr><td>${s.round}</td><td>${s.id}</td><td>${escHtml(s.name)}</td><td>${escHtml(s.zone)}</td>
@@ -3339,7 +3419,7 @@ function downloadBatchDayCSV(){
   if(!BATCH_DAY_WAVES || !BATCH_DAY_WAVES.length){
     alert('目前沒有可下載的併單結果，請先輸入或選擇出貨日期並按「查看」。'); return;
   }
-  const header = ['出貨日期','波次','併單方式','縣市','行政區','波次訂單數','波次明細行數','波次SKU數',
+  const header = ['出貨日期','波次','併單方式','縣市','行政區','波次訂單數','波次明細行數','波次商品數',
                   '波次揀貨回合數','波次移動距離(m)','回合','商品ID','商品名稱','分區','服務訂單數','數量'];
   const lines = [header.map(csvCell).join(',')];
   BATCH_DAY_WAVES.forEach((w, wi)=>{
@@ -3419,9 +3499,9 @@ async function renderKpiScreen(){
   // 10/10/5），這樣總覽頁改了目標，這裡的達標判定與敏感度分析門檻才會跟著一起變。
   r.targets = {dist: OVERVIEW_TARGETS.dist, rounds: OVERVIEW_TARGETS.rounds, worktime: OVERVIEW_TARGETS.worktime};
 
-  hero.innerHTML = heroTile('相對移動距離改善', r.dist_improvement, r.targets.dist)
-    + heroTile('揀貨回合數改善', r.rounds_improvement, r.targets.rounds)
-    + heroTile('總揀貨工時改善', r.worktime_improvement, r.targets.worktime);
+  hero.innerHTML = heroTile('相對移動距離改善', r.dist_improvement, r.targets.dist, '📏')
+    + heroTile('揀貨回合數改善', r.rounds_improvement, r.targets.rounds, '🔁')
+    + heroTile('總揀貨工時改善', r.worktime_improvement, r.targets.worktime, '⏱')
 
   document.getElementById('kpiCompareChart').innerHTML = kpiCompareBars([
     {label:'人工總移動距離', before:r.orig_dist, after:r.opt_dist, improvement:r.dist_improvement, target:r.targets.dist, fmt:v=>num(v)+' m'},
@@ -3439,17 +3519,21 @@ async function renderKpiScreen(){
     {name:'揀貨回合數改善率', key:'rounds_improvement', target:r.targets.rounds},
     {name:'總揀貨工時改善率', key:'worktime_improvement', target:r.targets.worktime},
   ];
+  // 改用 CSS Grid（.scenario-grid）取代原本的 <table>：欄寬由同一個 grid-template-columns
+  // 統一決定，表頭與每一列資料列的儲格全部是同一個 grid 容器裡的直接子項，天生共用同一組欄軌，
+  // 不會有表格欄寬計算（尤其含 pill 徽章、多行內容時）跟畫面寬度連動出現對不齊的情形。
   const rows = metrics.map(m=>{
     const cells = scenarios.map(([lab,f])=>{
       const v = r[m.key] * f, ok = v >= m.target;
-      return `<td>${v.toFixed(1)}%<br><span class="chip ${ok?'ok':'bad'}" style="margin-top:3px;">${ok?'達標':'未達'}</span></td>`;
+      return `<div class="sg-cell">${v.toFixed(1)}%<br><span class="chip ${ok?'ok':'bad'}" style="margin-top:3px;">${ok?'達標':'未達'}</span></div>`;
     }).join('');
-    return `<tr><td>${m.name}<div class="footnote" style="margin-top:2px;">目標 ≥${m.target}%</div></td>${cells}</tr>`;
+    return `<div class="sg-row"><div class="sg-cell sg-label">${m.name}<div class="footnote" style="margin-top:2px;">目標 ≥${m.target}%</div></div>${cells}</div>`;
   }).join('');
-  document.getElementById('scenarioTable').innerHTML = `<thead><tr><th>KPI 指標</th>
-    <th><span class="badge-scenario" style="background:color-mix(in srgb, var(--critical) 15%, transparent); color:var(--critical);">保守 ×0.7</span></th>
-    <th><span class="badge-scenario" style="background:color-mix(in srgb, var(--series-1) 16%, transparent); color:var(--series-1);">基準 ×1.0</span></th>
-    <th><span class="badge-scenario" style="background:color-mix(in srgb, var(--good) 18%, transparent); color:var(--success-text);">樂觀 ×1.3</span></th></tr></thead><tbody>${rows}</tbody>`;
+  document.getElementById('scenarioTable').innerHTML = `<div class="sg-row sg-head">
+    <div class="sg-cell">KPI 指標</div>
+    <div class="sg-cell"><span class="badge-scenario" style="background:color-mix(in srgb, var(--critical) 15%, transparent); color:var(--critical);">保守 ×0.7</span></div>
+    <div class="sg-cell"><span class="badge-scenario" style="background:color-mix(in srgb, var(--series-1) 16%, transparent); color:var(--series-1);">基準 ×1.0</span></div>
+    <div class="sg-cell"><span class="badge-scenario" style="background:color-mix(in srgb, var(--good) 18%, transparent); color:var(--success-text);">樂觀 ×1.3</span></div></div>${rows}`;
 }
 // 「改善前後比較」卡片：每項指標畫一組改善前／改善後橫向長條（長度＝實際數值比例），
 // 搭配右上角「改善 X%（目標 ≥Y%）」徽章，讓看的人不用先理解單位，光看長條縮短程度跟
@@ -3478,19 +3562,20 @@ function kpiCompareBars(items){
     </div>`;
   }).join('');
 }
-function heroTile(label, value, target){
+function heroTile(label, value, target, icon){
   const achieved = value >= target;
-  const color = achieved ? 'var(--success-text)' : 'var(--critical)';
-  return `<div class="card stat-tile">
+  return `<div class="hero-tile ${achieved?'ok':'bad'}">
+    <div class="h-icon">${icon||'📊'}</div>
     <div class="label">${escHtml(label)}</div>
-    <div class="value" style="color:${color};">${value.toFixed(1)}%</div>
-    <div class="delta" style="color:${color};">${achieved?'✅ 達成目標':'⚠ 尚未達目標'}（目標 ≥ ${target}%）</div>
+    <div class="value">${value.toFixed(1)}%</div>
+    <div class="delta">${achieved?'✅ 達成目標':'⚠ 尚未達目標'}（目標 ≥ ${target}%）</div>
   </div>`;
 }
 function runFullPipeline(){
-  // 對應原型「🔁 重新執行全流程模擬」：原型是重跑瀏覽器內的全部運算；後端版沒有可以
-  // 重跑的前端運算，這裡改成單純重新整理 KPI 頁面（重新呼叫 /api/kpi/compute 等）。
-  renderKpiScreen();
+  // 「重新執行全流程模擬」＝回到流程起點（資料匯入），讓使用者可以重新走一次
+  // 匯入→清洗→預測→儲位配置→揀貨策略→KPI 的完整流程；不會清除已匯入/已計算的資料，
+  // 只是導覽回第一步（各頁面本來就是每次進入時才向後端重新取值，等於重新跑一次）。
+  goScreen('import');
 }
 
 /* ---------------- 登入／註冊／啟動 ---------------- */

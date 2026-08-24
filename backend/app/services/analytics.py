@@ -133,7 +133,7 @@ def sku_frequency(clean_df):
     return {"items": items, "order_items": order_items, "total_orders": len(order_items)}
 
 
-def apply_abc_thresholds(items, a_thresh=70.0, b_thresh=90.0):
+def apply_abc_thresholds(items, a_thresh=80.0, b_thresh=95.0):
     """就地在 items 上加上 share／cum／cls，回傳門檻與總量（對應原 applyAbcThresholds）。"""
     total = sum(x["freq"] for x in items) or 1
     cum = 0.0
@@ -145,7 +145,7 @@ def apply_abc_thresholds(items, a_thresh=70.0, b_thresh=90.0):
     return {"a_thresh": a_thresh, "b_thresh": b_thresh, "total": total}
 
 
-def category_abc_from_sku(items, cat_name_map, a_thresh=70.0, b_thresh=90.0):
+def category_abc_from_sku(items, cat_name_map, a_thresh=80.0, b_thresh=95.0):
     """把已分級的 SKU 卷積成「商品類別」層級的 ABC 分級（對應原 computeCategoryAbcFromSku）。"""
     by_cat = {}
     for it in items:
@@ -791,7 +791,7 @@ def allocate_categories_to_slots(categories, pool):
     return categories
 
 
-def compute_storage_assignment(items, cat_name_map, zones, a_thresh=70.0, b_thresh=90.0,
+def compute_storage_assignment(items, cat_name_map, zones, a_thresh=80.0, b_thresh=95.0,
                                 sections=None, materials=None):
     """對應原 computeStorageAssignment：依「儲位配置」頁門檻分級的類別 ABC，把最近的儲位
     優先分給出貨次數最高的類別，回傳基準（未規劃）平均距離 vs 改善後加權平均距離。"""
@@ -914,7 +914,7 @@ def _predicted_periods(agg):
     return periods
 
 
-def compute_predicted_category_abc(clean_df, cat_name_map, a_thresh=70.0, b_thresh=90.0):
+def compute_predicted_category_abc(clean_df, cat_name_map, a_thresh=80.0, b_thresh=95.0):
     """對應原 computePredictedCategoryAbc：貨架類商品依「預測揀貨次數」分級、棧板類依
     「預測出貨量」分級（因為貨架區重效率／棧板區重量體，兩種儲位在意的指標不同）。"""
     agg = compute_forecast_agg(clean_df, "month")
@@ -1087,7 +1087,7 @@ def predicted_sku_pick_counts(clean_df, recent_n=COLD_START_RECENT_N):
             "new_set": ctx["new_set"]}
 
 
-def classify_predicted_sku(pred_values, a_thresh=70.0, b_thresh=90.0):
+def classify_predicted_sku(pred_values, a_thresh=80.0, b_thresh=95.0):
     """把 predicted_sku_values() 的結果依門檻分級（對應原 computePredictedSkuByZone 的門檻套用段）。"""
     if pred_values.get("insufficient"):
         return {"insufficient": True}
@@ -1110,7 +1110,7 @@ def classify_predicted_sku(pred_values, a_thresh=70.0, b_thresh=90.0):
             "a_thresh": a_thresh, "b_thresh": b_thresh}
 
 
-def compute_predicted_sku_by_zone(clean_df, a_thresh=70.0, b_thresh=90.0):
+def compute_predicted_sku_by_zone(clean_df, a_thresh=80.0, b_thresh=95.0):
     """一次算完（不快取中間值）的版本，供不需要自行管理快取的呼叫端直接用
     （對應原 computePredictedSkuByZone）。"""
     return classify_predicted_sku(predicted_sku_values(clean_df), a_thresh, b_thresh)
@@ -1200,7 +1200,7 @@ def cw_clusters(ids, pairs):
     return list(groups.values())
 
 
-def compute_wh_assignment(clean_df, cat_name_map, zones, a_thresh=70.0, b_thresh=90.0):
+def compute_wh_assignment(clean_df, cat_name_map, zones, a_thresh=80.0, b_thresh=95.0):
     """對應原 computeWhAssignment()。回傳：
       before_cat_zone：改善前，類別→分區代號（依面積配對，大類別配大區塊）。
       after_sku_zone ：改善後，SKU→分區代號（A/B 級依「共同揀取關聯」聚簇相鄰擺放；
@@ -1807,7 +1807,7 @@ def compute_batch_strategies(orders, capacity, threshold_n, zone_dist, sku_zone,
     }
 
 
-def batch_geo_context(clean_df, cat_name_map, zones, a_thresh=70.0, b_thresh=90.0):
+def batch_geo_context(clean_df, cat_name_map, zones, a_thresh=80.0, b_thresh=95.0):
     """組裝地理分群批次模擬要用的 zone_dist／sku_zone／before_zone／sku_info——這些原本是
     原型的全域變數（WHZ／WH_ASSIGN_CACHE），這裡改成呼叫 compute_wh_assignment() 現算現組
     （對應原 whZoneMaps）。呼叫端應把這個結果快取起來（依 a_thresh/b_thresh 當 key），

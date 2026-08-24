@@ -39,7 +39,7 @@ def compute(capacity: int = Query(20, ge=1, le=500),
                                       description="一波訂單數達此門檻才就地併單，否則併入同日同縣市稀疏池"),
             speed: float = Query(1.0, gt=0),
             handle_sec: float = Query(12.0, ge=0),
-            a_thresh: float = Query(70, ge=0, le=100), b_thresh: float = Query(90, ge=0, le=100),
+            a_thresh: float = Query(80, ge=0, le=100), b_thresh: float = Query(95, ge=0, le=100),
             sess: state.SessionState = Depends(require_clean_result)):
     # 拉「速度／取放秒數」等滑桿時，只有最後的 compute_kpi 會變（且只有工時改善率會變——
     # 距離／回合數改善率本來就只跟儲位配置與批次分波有關，跟這兩個滑桿無關，這是設計如此

@@ -140,7 +140,7 @@ def _copick_partners(sess, result, sku_id):
 
 
 @router.get("/wh_assignment")
-def wh_assignment(a_thresh: float = Query(70, ge=0, le=100), b_thresh: float = Query(90, ge=0, le=100),
+def wh_assignment(a_thresh: float = Query(80, ge=0, le=100), b_thresh: float = Query(95, ge=0, le=100),
                    sku_id: Optional[int] = Query(None, description="只查單一 SKU 目前被分到哪個分區"),
                    sess: state.SessionState = Depends(require_clean_result)):
     """對應原前端 computeWhAssignment()／renderWhTabMap() 等：精細版儲位配置，依「共同揀取
@@ -175,7 +175,7 @@ def wh_assignment(a_thresh: float = Query(70, ge=0, le=100), b_thresh: float = Q
 
 
 @router.get("/wh_assignment/rows")
-def wh_assignment_rows(a_thresh: float = Query(70, ge=0, le=100), b_thresh: float = Query(90, ge=0, le=100),
+def wh_assignment_rows(a_thresh: float = Query(80, ge=0, le=100), b_thresh: float = Query(95, ge=0, le=100),
                         sess: state.SessionState = Depends(require_clean_result)):
     """每個商品一列的「改善前 vs 改善後」儲位配置，供「商品配置查詢」的下載按鈕組成 CSV。
 
