@@ -1257,14 +1257,14 @@
         <div class="card">
           <h3>情境參數</h3>
           <div class="slider-row">
-            <div class="slider-label"><span>播種批次容量（每趟最多揀取商品數）</span><span class="val" id="batchCapVal">20 個商品</span></div>
+            <div class="slider-label"><span>播種批次容量（每趟最多揀取的不同商品數）</span><span class="val" id="batchCapVal">20 種商品</span></div>
             <input type="range" id="batchCapSlider" min="5" max="40" value="20" step="1" oninput="onBatchSliderChange()">
           </div>
           <div class="slider-row">
             <div class="slider-label"><span>稀疏門檻 N（行政區訂單 ≥N 就地併單，否則併入同縣市）</span><span class="val" id="batchNVal">5</span></div>
             <input type="range" id="batchNSlider" min="1" max="20" value="5" step="1" oninput="onBatchNChange()">
           </div>
-          <p class="footnote">容量以 10／20／30 個商品比較，20 為基準。若每群不重複商品數中位數 ≤ 容量，代表整群多能一趟揀完、容量影響有限。</p>
+          <p class="footnote">容量以 10／20／30 種商品比較，20 為基準。若每群不重複商品數中位數 ≤ 容量，代表整群多能一趟揀完、容量影響有限。</p>
           <div class="kv-grid">
             <div class="kv"><span class="k">訂單總數</span><span class="v" id="batchOrderCount">—</span></div>
             <div class="kv"><span class="k">訂單明細總行數</span><span class="v" id="batchLineCount">—</span></div>
@@ -3403,8 +3403,8 @@ function renderSelectedWave(){
             <td style="text-align:right;">${num(rs.dist)}</td><td style="text-align:right;">${rs.cum_done}（${pct(rs.cum_pct)}）</td></tr>`).join('')}</tbody></table></div>
         <details open><summary>展開商品揀取順序（依回合）</summary>
           <div class="table-scroll" style="max-height:280px; margin-top:8px;"><table class="data-table"><thead><tr>
-            <th>回合</th><th>商品ID</th><th>商品名稱</th><th>分區</th><th style="text-align:right;">服務訂單數</th><th style="text-align:right;">數量</th></tr></thead><tbody>
-            ${w.seq.map(s=>`<tr><td>${s.round}</td><td>${s.id}</td><td>${escHtml(s.name)}</td><td>${escHtml(s.zone)}</td>
+            <th>揀貨順序</th><th>回合</th><th>商品ID</th><th>商品名稱</th><th>分區</th><th style="text-align:right;">服務訂單數</th><th style="text-align:right;">數量</th></tr></thead><tbody>
+            ${w.seq.map((s,i)=>`<tr><td>${i+1}</td><td>${s.round}</td><td>${s.id}</td><td>${escHtml(s.name)}</td><td>${escHtml(s.zone)}</td>
               <td style="text-align:right;">${s.serves}</td><td style="text-align:right;">${num(s.qty)}</td></tr>`).join('')}</tbody></table></div>
         </details>
       </div>`;
